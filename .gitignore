@@ -1,0 +1,6 @@
+.vscdode/
+build/
+*.3dsx
+*.cia
+*.elf
+*.smdh

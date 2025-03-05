@@ -1,0 +1,38 @@
+{
+    "env": {
+        "defaultIncludePath": [
+            "${workspaceFolder}/include/",
+            "${workspaceFolder}/source/",
+            "${workspaceFolder}/include/**"
+        ],
+        "defaultDefines": [],
+        "ctrIncludePaths": [
+            "C:/devkitpro/libctru/include/**",
+            "C:/devkitpro/portlibs/3ds/include/**"
+        ],
+        "ctrDefines": [
+            "__3DS__"
+        ],
+        "ctrCompilerPath": "C:/devkitpro/devkitARM/bin/arm-none-eabi-gcc"
+    },
+    "configurations": [
+        {
+            "name": "3DS",
+            "includePath": [
+                "${env:defaultIncludePath}",
+                "${env:ctrIncludePaths}",
+                "${workspaceFolder}/source",
+                "C:/devkitPro/libctru/include"
+            ],
+            "defines": [
+                "${env:defaultDefines}",
+                "${env:ctrDefines}"
+            ],
+            "compilerPath": "${env:ctrCompilerPath}",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-arm"
+        }
+    ],
+    "version": 4
+}
