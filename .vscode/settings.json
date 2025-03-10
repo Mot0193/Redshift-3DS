@@ -1,0 +1,20 @@
+{
+    "files.associations": {
+        "stdlib.h": "c",
+        "3ds.h": "c",
+        "cjson.h": "c",
+        "malloc.h": "c",
+        "string.h": "c",
+        "stdio.h": "c",
+        "curl.h": "c",
+        "citro2d.h": "c",
+        "jsonparsing.h": "c",
+        "curlrequests.h": "c",
+        "socket3ds.h": "c",
+        "poll.h": "c",
+        "messageassemble.h": "c",
+        "messagerendering.h": "c",
+        "typeinfo": "c",
+        "type_traits": "c"
+    }
+}
