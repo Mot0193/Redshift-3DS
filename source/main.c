@@ -19,9 +19,13 @@
 
 
 
-struct MessageStructure recent_messages[MAX_REND_MESSAGES] = {0}; // array for storing message structs
+//struct MessageStructure recent_messages[MAX_REND_MESSAGES] = {0}; // array for storing message structs
 struct Quark *joined_quarks = NULL; // dynamic array for storing joined quarks (and channels)
 char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, used to filter websocket messages and stuff
+
+size_t selected_quark = 0;
+size_t selected_channel = 0;
+size_t entered_selected_channel = 0;
 
 void printMessageAtIndex(struct MessageStructure *recent_messages, int index) {
     // quick ai-made function for debugging, bite me. Printing is boring
@@ -132,12 +136,23 @@ void WS_reader_thread(void *ws_curl_handle)
         char * received_payload = receive_websocket_frame(ws_curl_handle);
         if (received_payload != NULL){
             cJSON *json_response = jsonGatewayReader(received_payload);
+
             if (json_response != NULL){
                 cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
-                if (strcmp(channelId->valuestring, selected_channel_id) == 0){
-                    addMessageToArray(recent_messages, MAX_REND_MESSAGES, json_response);
-                } else printf("Channel does not match for message!\n");
+
+                for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++){
+
+                    if (strcmp(channelId->valuestring, joined_quarks[selected_quark].channels[i].channel_id) == 0){
+
+                        //if (!joined_quarks[selected_quark].channels[i].message_index) joined_quarks[selected_quark].channels[i].message_index = 0;
+                        // changed to using calloc when allocating memory for channels instead of doing this
+
+                        addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, json_response);
+                        break;
+                    }
+                }
             }
+            
             free(received_payload);
         } else {
             printf("Something happened when receiving websocket frame.\n"); //very decriptive error message
@@ -190,9 +205,7 @@ int main() {
     Thread thread_WS_heartbeat = threadCreate(WS_heartbeat_thread, curl_WS_handle, 1024, 0x2F, -2, false); //start heartbeat thread
 
     float scroll_offset = 0;
-    size_t selected_quark = 0;
-    size_t selected_channel = 0;
-    size_t entered_selected_channel = 0;
+
     bool channel_select = false;
     while (aptMainLoop()) {
         hidScanInput();
@@ -216,17 +229,12 @@ int main() {
 
         
         // --- DPAD Controls (for channel/quark selection) ---
-        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         if (kDown & KEY_DUP){
             if (channel_select){
                 selected_channel = (selected_channel <= 0 ? 0 : selected_channel - 1);
             } else {
                 selected_quark = (selected_quark <= 0 ? 0 : selected_quark - 1);
             }
-            
-            C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
-            C2D_SceneBegin(bot);
-            DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
         }
         if (kDown & KEY_DDOWN){
             if (channel_select){
@@ -234,10 +242,6 @@ int main() {
             } else {
                 selected_quark = (selected_quark >= joined_quark_count-1 ? joined_quark_count-1 : selected_quark + 1); //joined_quark_count-1 because joined qurk starts at 1 not 0
             }
-
-            C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
-            C2D_SceneBegin(bot);
-            DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
         }
         if (kDown & KEY_DRIGHT){
             if (channel_select){
@@ -245,29 +249,25 @@ int main() {
             } else {
                 channel_select = true;
             }
-            freeMessageArrayFull(recent_messages, MAX_REND_MESSAGES);
-            strcpy(selected_channel_id, joined_quarks[selected_quark].channels[entered_selected_channel].channel_id);
-
-            C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
-            C2D_SceneBegin(bot);
-            DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+            if (joined_quarks[selected_quark].channels_count>0) strcpy(selected_channel_id, joined_quarks[selected_quark].channels[entered_selected_channel].channel_id);
         }
         if (kDown & KEY_DLEFT){
             channel_select = false;
             selected_channel = 0;
-            entered_selected_channel = 0;
-
-            C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
-            C2D_SceneBegin(bot);
-            DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+            entered_selected_channel = 0; 
         }
 
         
-        
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+
         C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(top);
-        DrawStructuredMessage(recent_messages, MAX_REND_MESSAGES, scroll_offset);
+        DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
 
+        C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
+        C2D_SceneBegin(bot);
+        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+        
         C3D_FrameEnd(0);
     }
     printf("Exiting...");
