@@ -529,8 +529,7 @@ char *receive_websocket_frame(CURL *curl){
         free(received_payload);
         break;
     }
-
-    free(received_payload);
+    
     return NULL;
 }
 

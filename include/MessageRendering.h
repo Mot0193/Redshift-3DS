@@ -21,7 +21,7 @@ C2D_Text contentText, usernameText;
 #define MAX_CHAR_PER_MESSAGE_LINE 65
 #define LQ_IDLENGTH 25 // 24 + 1 for null terminator.. i think. I think im right since with 24 something falls over
 
-#define MAX_REND_MESSAGES 10 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
+#define MAX_REND_MESSAGES 2 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
 
 #define MAX_CHANNEL_QUARK 6 // the max channels or quarks that should get displayed on a *page*
 
@@ -270,46 +270,76 @@ int countLines(const char *wrappedMessage) {
 }
 
 void freeMessageArrayAtIndex(struct MessageStructure *messages, int index) {
-    //despite the function name, it also clears replyTo, which is not dynamically allocated
-    free(messages[index].content);
-    free(messages[index].ua);
+    if (!messages) return;
 
-    free(messages[index].username);
-    free(messages[index].avatarUri);
+    if (messages[index].content) {
+        free(messages[index].content);
+        messages[index].content = NULL;
+    }
+    if (messages[index].ua) {
+        free(messages[index].ua);
+        messages[index].ua = NULL;
+    }
+    if (messages[index].username) {
+        free(messages[index].username);
+        messages[index].username = NULL;
+    }
+    if (messages[index].avatarUri) {
+        free(messages[index].avatarUri);
+        messages[index].avatarUri = NULL;
+    }
 
     for (int i = 0; i < messages[index].attachment_count; i++) {
-        free(messages[index].attachments[i].url);
-        free(messages[index].attachments[i].type);
-        free(messages[index].attachments[i].filename);
+        if (messages[index].attachments[i].url) {
+            free(messages[index].attachments[i].url);
+            messages[index].attachments[i].url = NULL;
+        }
+        if (messages[index].attachments[i].type) {
+            free(messages[index].attachments[i].type);
+            messages[index].attachments[i].type = NULL;
+        }
+        if (messages[index].attachments[i].filename) {
+            free(messages[index].attachments[i].filename);
+            messages[index].attachments[i].filename = NULL;
+        }
     }
-    free(messages[index].attachments);
+    if (messages[index].attachments) {
+        free(messages[index].attachments);
+        messages[index].attachments = NULL;
+    }
+    
 
     for (int i = 0; i < messages[index].specialAttribute_count; i++) {
-        free(messages[index].specialAttributes[i].type);
-
-        free(messages[index].specialAttributes[i].username);
-        free(messages[index].specialAttributes[i].avatarUri);
-
-        //todo fix replyto here too i think i need to clear/remove it //what is past me yapping about i forgot?? //nvm i remember???
-        messages[index].specialAttributes[i].replyTo[0] = '\0';
-
-        free(messages[index].specialAttributes[i].plaintext);
+        if (messages[index].specialAttributes[i].type) {
+            free(messages[index].specialAttributes[i].type);
+            messages[index].specialAttributes[i].type = NULL;
+        }
+        if (messages[index].specialAttributes[i].username) {
+            free(messages[index].specialAttributes[i].username);
+            messages[index].specialAttributes[i].username = NULL;
+        }
+        if (messages[index].specialAttributes[i].avatarUri) {
+            free(messages[index].specialAttributes[i].avatarUri);
+            messages[index].specialAttributes[i].avatarUri = NULL;
+        }
+        if (messages[index].specialAttributes[i].plaintext) {
+            free(messages[index].specialAttributes[i].plaintext);
+            messages[index].specialAttributes[i].plaintext = NULL;
+        }
     }
-    free(messages[index].specialAttributes);
-}
-
-void freeMessageArrayFull(struct MessageStructure *recent_messages, int array_size){
-    //crazy function 
-    // NO NO BAD funtion it makes things crash
-    for (int i = 0; i < array_size; i++){
-        freeMessageArrayAtIndex(recent_messages, i);
+    if (messages[index].specialAttributes) {
+        free(messages[index].specialAttributes);
+        messages[index].specialAttributes = NULL;
     }
+    
 }
 
 void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *json_response){
+    printf("Adding message to array...\n");
+
     cJSON *message = cJSON_GetObjectItemCaseSensitive(json_response, "message");
     if (!message){
-        printf("addMessage: No message found when trying to add to message array\n");
+        printf("No message found when trying to add to message array\n");
         return;
     }
 
@@ -331,21 +361,24 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 
     cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
 
-    if (strlen(content->valuestring) > MAX_CHAR_PER_MESSAGE_LINE){
-        char *wrappedcontent = NULL;
+    char *wrappedContent = NULL;
+    if (strlen(content->valuestring) > MAX_CHAR_PER_MESSAGE_LINE) {
         printf("Message too long, wrapping message...\n");
-        wrappedcontent = WrappedMessage(content->valuestring);
-        content->valuestring = wrappedcontent; // apparently its bad to modify cjson's structs directly.. hm.. too bad
+        wrappedContent = WrappedMessage(content->valuestring);
+    } else {
+        wrappedContent = strdup(content->valuestring);
     }
 
     int content_lines = countLines(content->valuestring);
     int message_index = channel_struct->message_index;
     //int total_messages = channel_struct->total_messages;
 
+    printf("Freeing message array...\n");
     freeMessageArrayAtIndex(channel_struct->messages, message_index);
+    printf("Fred message\n");
 
     snprintf(channel_struct->messages[message_index].message_id, sizeof(channel_struct->messages[message_index].message_id), "%s", message_id->valuestring);
-    channel_struct->messages[message_index].content = strdup(content->valuestring);
+    channel_struct->messages[message_index].content = strdup(wrappedContent);
     channel_struct->messages[message_index].ua = strdup(ua->valuestring);
     channel_struct->messages[message_index].timestamp = timestamp->valuedouble;
     channel_struct->messages[message_index].edited = cJSON_IsTrue(edited);
@@ -378,7 +411,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
             att_height ? channel_struct->messages[message_index].attachments[i].height = cJSON_GetNumberValue(att_height) : 0;
 
             cJSON *att_width = cJSON_GetObjectItem(att, "width");
-            att_height ? channel_struct->messages[message_index].attachments[i].width = cJSON_GetNumberValue(att_width) : 0;
+            att_width ? channel_struct->messages[message_index].attachments[i].width = cJSON_GetNumberValue(att_width) : 0;
         }
     } else {
         channel_struct->messages[message_index].attachments = NULL;
@@ -386,6 +419,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
     }
 
     // Attributes ----
+    
     if (specialAttributes && cJSON_IsArray(specialAttributes) && cJSON_GetArraySize(specialAttributes) > 0) {
         int count = cJSON_GetArraySize(specialAttributes);
         channel_struct->messages[message_index].specialAttributes = malloc(count * sizeof(struct SpecialAttribute));
@@ -402,8 +436,8 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
             if (avatarUri) channel_struct->messages[message_index].specialAttributes[i].avatarUri = strdup(cJSON_GetStringValue(avatarUri));
             
             cJSON *replyTo = cJSON_GetObjectItem(attr, "replyTo");
-            if (replyTo) {snprintf(channel_struct->messages[message_index].specialAttributes[i].replyTo, 
-                sizeof(channel_struct->messages[message_index].specialAttributes[i].replyTo), "%s", replyTo->valuestring);
+            if (replyTo) {
+                snprintf(channel_struct->messages[message_index].specialAttributes[i].replyTo, sizeof(channel_struct->messages[message_index].specialAttributes[i].replyTo), "%s", replyTo->valuestring);
             }
 
             cJSON *discordMessageId = cJSON_GetObjectItem(attr, "discordMessageId");
@@ -416,6 +450,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
         channel_struct->messages[message_index].specialAttributes = NULL;
         channel_struct->messages[message_index].specialAttribute_count = 0;
     }
+    
 
      
     channel_struct->message_index = (channel_struct->message_index + 1) % array_size;
@@ -423,7 +458,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
         channel_struct->total_messages++;
     }
 
-    cJSON_Delete(json_response); // all copied, nuke the json
+    printf("!!! Done adding message\n");
 }
 
 // --- --- [ RENDERING ] --- ---

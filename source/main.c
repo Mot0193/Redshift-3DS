@@ -17,8 +17,6 @@
 #define GATEWAY_URL "https://gw.ram.lightquark.network"
 #define LOGIN_DATA "{\"email\": \"testuser@litdevs.org\",\"password\": \"wordpass\"}"
 
-
-
 //struct MessageStructure recent_messages[MAX_REND_MESSAGES] = {0}; // array for storing message structs
 struct Quark *joined_quarks = NULL; // dynamic array for storing joined quarks (and channels)
 char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, used to filter websocket messages and stuff
@@ -134,29 +132,22 @@ void WS_reader_thread(void *ws_curl_handle)
 	while (runThreads)
 	{
         char * received_payload = receive_websocket_frame(ws_curl_handle);
-        if (received_payload != NULL){
-            cJSON *json_response = jsonGatewayReader(received_payload);
+        if (!received_payload) continue;
 
-            if (json_response != NULL){
-                cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
+        cJSON *json_response = jsonGatewayReader(received_payload);
+        free(received_payload);
 
-                for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++){
+        if (!json_response) continue;
 
-                    if (strcmp(channelId->valuestring, joined_quarks[selected_quark].channels[i].channel_id) == 0){
-
-                        //if (!joined_quarks[selected_quark].channels[i].message_index) joined_quarks[selected_quark].channels[i].message_index = 0;
-                        // changed to using calloc when allocating memory for channels instead of doing this
-
-                        addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, json_response);
-                        break;
-                    }
-                }
+        cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
+        for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++) {
+            if (strcmp(channelId->valuestring, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
+                addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, json_response);
+                break;
             }
-            
-            free(received_payload);
-        } else {
-            printf("Something happened when receiving websocket frame.\n"); //very decriptive error message
         }
+
+        cJSON_Delete(json_response);
 	}
 }
 
@@ -172,7 +163,7 @@ void WS_heartbeat_thread(void *ws_curl_handle){
 
 int main() {
     gfxInitDefault();
-    //consoleInit(GFX_TOP, NULL);
+    consoleInit(GFX_BOTTOM, NULL);
 
     initSocketSerive();
 	atexit(socShutdown);
@@ -210,6 +201,7 @@ int main() {
     while (aptMainLoop()) {
         hidScanInput();
         u32 kDown = hidKeysDown();
+        //u32 kDown = hidKeysHeld();
         //u32 kHeld = hidKeysHeld();
         circlePosition CPadPos;
         hidCircleRead(&CPadPos);
@@ -256,17 +248,17 @@ int main() {
             selected_channel = 0;
             entered_selected_channel = 0; 
         }
-
         
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
         C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(top);
         DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
-
-        C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
-        C2D_SceneBegin(bot);
         DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+
+        //C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
+        //C2D_SceneBegin(bot);
+        //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
         
         C3D_FrameEnd(0);
     }
@@ -276,14 +268,14 @@ int main() {
     C2D_TextBufDelete(text_usernameBuf);
 
     runThreads = false;
-    curl_easy_cleanup(curl_WS_handle);
-    curl_WS_handle = NULL;
 
     threadJoin(thread_WS_reader, 1000000000);
     threadFree(thread_WS_reader);
 
     threadJoin(thread_WS_heartbeat, 1000000000);
     threadFree(thread_WS_heartbeat);
+
+    curl_easy_cleanup(curl_WS_handle);
 
     gfxExit();
     return 0;
