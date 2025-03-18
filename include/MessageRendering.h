@@ -137,9 +137,18 @@ void freeQuarks(struct Quark **joined_quarks){
         for(int j = 0; j < (*joined_quarks)[i].channels_count; j++){
             free((*joined_quarks)[i].channels[j].name);
             free((*joined_quarks)[i].channels[j].description);
+
+            /*
+            Ugh now i realize why people sperate header files from source files for libraries
+            for (int k = 0; k < (*joined_quarks)[i].channels[j].total_messages; k++) {
+                freeMessageArrayAtIndex((*joined_quarks)[i].channels[j].messages, k);
+            }
+            */
         }
+
         free((*joined_quarks)[i].channels);
     }
+
     free(*joined_quarks);
     *joined_quarks = NULL;
 }
@@ -269,73 +278,145 @@ int countLines(const char *wrappedMessage) {
     return lines+1; //+1 because the message will always have at least one line
 }
 
-void freeMessageArrayAtIndex(struct MessageStructure *messages, int index) {
-    if (!messages) return;
+void freeHELPMessageArrayAtIndex(struct MessageStructure *messages, int index) {
+    // slowly prints each time it fees something, used for debugging, i will get rid of this eventually
+    if (!messages) {
+        return;
+    }
 
-    if (messages[index].content) {
-        free(messages[index].content);
-        messages[index].content = NULL;
-    }
-    if (messages[index].ua) {
-        free(messages[index].ua);
-        messages[index].ua = NULL;
-    }
-    if (messages[index].username) {
-        free(messages[index].username);
-        messages[index].username = NULL;
-    }
-    if (messages[index].avatarUri) {
-        free(messages[index].avatarUri);
-        messages[index].avatarUri = NULL;
-    }
+    printf("Free Content\n");
+    usleep(500 * 1000);
+    free(messages[index].content);
+    messages[index].content = NULL;
+
+    printf("Free ua\n");
+    usleep(500 * 1000);
+    free(messages[index].ua);
+    messages[index].ua = NULL;
+
+    printf("Free username\n");
+    usleep(500 * 1000);
+    free(messages[index].username);
+    messages[index].username = NULL;
+
+    printf("Free avatarUri\n");
+    usleep(500 * 1000);
+    free(messages[index].avatarUri);
+    messages[index].avatarUri = NULL;
 
     for (int i = 0; i < messages[index].attachment_count; i++) {
-        if (messages[index].attachments[i].url) {
-            free(messages[index].attachments[i].url);
-            messages[index].attachments[i].url = NULL;
-        }
-        if (messages[index].attachments[i].type) {
-            free(messages[index].attachments[i].type);
-            messages[index].attachments[i].type = NULL;
-        }
-        if (messages[index].attachments[i].filename) {
-            free(messages[index].attachments[i].filename);
-            messages[index].attachments[i].filename = NULL;
-        }
+
+        printf("Free attachments[%i].url\n", i);
+        usleep(500 * 1000);
+        free(messages[index].attachments[i].url);
+        messages[index].attachments[i].url = NULL;
+
+        printf("Free attachments[%i].type\n", i);
+        usleep(500 * 1000);
+        free(messages[index].attachments[i].type);
+        messages[index].attachments[i].type = NULL;
+
+        printf("Free attachments[%i].filename\n", i);
+        usleep(500 * 1000);
+        free(messages[index].attachments[i].filename);
+        messages[index].attachments[i].filename = NULL;
+
     }
-    if (messages[index].attachments) {
-        free(messages[index].attachments);
-        messages[index].attachments = NULL;
-    }
+
+    printf("Free attachments\n");
+    usleep(500 * 1000);
+    free(messages[index].attachments);
+    messages[index].attachments = NULL;
+
     
 
     for (int i = 0; i < messages[index].specialAttribute_count; i++) {
-        if (messages[index].specialAttributes[i].type) {
-            free(messages[index].specialAttributes[i].type);
-            messages[index].specialAttributes[i].type = NULL;
-        }
-        if (messages[index].specialAttributes[i].username) {
-            free(messages[index].specialAttributes[i].username);
-            messages[index].specialAttributes[i].username = NULL;
-        }
-        if (messages[index].specialAttributes[i].avatarUri) {
-            free(messages[index].specialAttributes[i].avatarUri);
-            messages[index].specialAttributes[i].avatarUri = NULL;
-        }
-        if (messages[index].specialAttributes[i].plaintext) {
-            free(messages[index].specialAttributes[i].plaintext);
-            messages[index].specialAttributes[i].plaintext = NULL;
-        }
+
+        printf("Free specialAttributes[%i].type\n", i);
+        usleep(500 * 1000);
+        free(messages[index].specialAttributes[i].type);
+        messages[index].specialAttributes[i].type = NULL;
+
+        printf("Free specialAttributes[%i].username\n", i);
+        usleep(500 * 1000);
+        free(messages[index].specialAttributes[i].username);
+        messages[index].specialAttributes[i].username = NULL;
+
+        printf("Free specialAttributes[%i].avatarUri\n", i);
+        usleep(500 * 1000);
+        free(messages[index].specialAttributes[i].avatarUri);
+        messages[index].specialAttributes[i].avatarUri = NULL;
+
+        printf("Free specialAttributes[%i].plaintext\n", i);
+        usleep(500 * 1000);
+        free(messages[index].specialAttributes[i].plaintext);
+        messages[index].specialAttributes[i].plaintext = NULL;
     }
-    if (messages[index].specialAttributes) {
-        free(messages[index].specialAttributes);
-        messages[index].specialAttributes = NULL;
+
+    printf("Free specialAttributes\n");
+    usleep(500 * 1000);
+    free(messages[index].specialAttributes);
+    messages[index].specialAttributes = NULL;
+}
+
+void freeMessageArrayAtIndex(struct MessageStructure *messages, int index) {
+    if (!messages) {
+        return;
     }
+
+    free(messages[index].content);
+    messages[index].content = NULL;
+
+    free(messages[index].ua);
+    messages[index].ua = NULL;
+
+    free(messages[index].username);
+    messages[index].username = NULL;
+
+    free(messages[index].avatarUri);
+    messages[index].avatarUri = NULL;
+
+    for (int i = 0; i < messages[index].attachment_count; i++) {
+
+        free(messages[index].attachments[i].url);
+        messages[index].attachments[i].url = NULL;
+
+        free(messages[index].attachments[i].type);
+        messages[index].attachments[i].type = NULL;
+
+        free(messages[index].attachments[i].filename);
+        messages[index].attachments[i].filename = NULL;
+
+    }
+
+    free(messages[index].attachments);
+    messages[index].attachments = NULL;
+
     
+
+    for (int i = 0; i < messages[index].specialAttribute_count; i++) {
+
+        free(messages[index].specialAttributes[i].type);
+        messages[index].specialAttributes[i].type = NULL;
+
+        
+        free(messages[index].specialAttributes[i].username);
+        messages[index].specialAttributes[i].username = NULL;
+
+        
+        free(messages[index].specialAttributes[i].avatarUri);
+        messages[index].specialAttributes[i].avatarUri = NULL;
+
+        
+        free(messages[index].specialAttributes[i].plaintext);
+        messages[index].specialAttributes[i].plaintext = NULL;
+    }
+
+    free(messages[index].specialAttributes);
+    messages[index].specialAttributes = NULL;
 }
 
 void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *json_response){
-    printf("Adding message to array...\n");
 
     cJSON *message = cJSON_GetObjectItemCaseSensitive(json_response, "message");
     if (!message){
@@ -375,7 +456,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 
     printf("Freeing message array...\n");
     freeMessageArrayAtIndex(channel_struct->messages, message_index);
-    printf("Fred message\n");
+    printf("Fred message\n"); // who is Fred
 
     snprintf(channel_struct->messages[message_index].message_id, sizeof(channel_struct->messages[message_index].message_id), "%s", message_id->valuestring);
     channel_struct->messages[message_index].content = strdup(wrappedContent);
@@ -393,7 +474,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
     snprintf(channel_struct->messages[message_index].channelId, sizeof(channel_struct->messages[message_index].channelId), "%s", channelId->valuestring);
     channel_struct->messages[message_index].content_line_number = content_lines;
 
-
+    
     // Attachments ----
     if (attachments && cJSON_IsArray(attachments) && cJSON_GetArraySize(attachments) > 0) {
         int count = cJSON_GetArraySize(attachments);
@@ -431,20 +512,28 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 
             cJSON *username = cJSON_GetObjectItem(attr, "username");
             if (username) channel_struct->messages[message_index].specialAttributes[i].username = strdup(cJSON_GetStringValue(username));
+            else channel_struct->messages[message_index].specialAttributes[i].username = NULL;
 
             cJSON *avatarUri = cJSON_GetObjectItem(attr, "avatarUri");
             if (avatarUri) channel_struct->messages[message_index].specialAttributes[i].avatarUri = strdup(cJSON_GetStringValue(avatarUri));
+            else channel_struct->messages[message_index].specialAttributes[i].avatarUri = NULL;
             
             cJSON *replyTo = cJSON_GetObjectItem(attr, "replyTo");
             if (replyTo) {
                 snprintf(channel_struct->messages[message_index].specialAttributes[i].replyTo, sizeof(channel_struct->messages[message_index].specialAttributes[i].replyTo), "%s", replyTo->valuestring);
-            }
+            } else channel_struct->messages[message_index].specialAttributes[i].replyTo[0] = '\0';
 
             cJSON *discordMessageId = cJSON_GetObjectItem(attr, "discordMessageId");
             if (discordMessageId) channel_struct->messages[message_index].specialAttributes[i].discordMessageId = cJSON_GetNumberValue(discordMessageId);
+            else channel_struct->messages[message_index].specialAttributes[i].discordMessageId = 0;
 
             cJSON *quarkcord = cJSON_GetObjectItem(attr, "quarkcord");
             if (quarkcord) channel_struct->messages[message_index].specialAttributes[i].quarkcord = cJSON_IsTrue(quarkcord);
+            else channel_struct->messages[message_index].specialAttributes[i].quarkcord = NULL;
+
+            cJSON *plaintext = cJSON_GetObjectItem(attr, "plaintext");
+            if (plaintext) channel_struct->messages[message_index].specialAttributes[i].plaintext = strdup(cJSON_GetStringValue(plaintext));
+            else channel_struct->messages[message_index].specialAttributes[i].plaintext = NULL;
         }
     } else {
         channel_struct->messages[message_index].specialAttributes = NULL;
@@ -497,7 +586,7 @@ void DrawStructuredMessage(struct Channel *channel_struct, int array_size, float
             C2D_TextOptimize(&contentText);
             C2D_DrawText(&contentText, C2D_WithColor, 0.0f, total_messages_height + scrolling_offset, 0.0f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
             
-            float message_height = channel_struct->messages[message_arr_index].content_line_number * 15; //tood make this use C2D_TextGetDimensions. Might require seperating each message/username into its own buffer/buffer array index. See DrawQuarks
+            float message_height = channel_struct->messages[message_arr_index].content_line_number * 15; //todo make this use C2D_TextGetDimensions. Might require seperating each message/username into its own buffer/buffer array index. See DrawQuarks
             total_messages_height += message_height;
         }
     }

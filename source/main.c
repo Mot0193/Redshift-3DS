@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include <unistd.h>
+
 #include <citro2d.h>
 
 #include <curl/curl.h>
@@ -24,6 +26,7 @@ char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, u
 size_t selected_quark = 0;
 size_t selected_channel = 0;
 size_t entered_selected_channel = 0;
+
 
 void printMessageAtIndex(struct MessageStructure *recent_messages, int index) {
     // quick ai-made function for debugging, bite me. Printing is boring
@@ -165,7 +168,7 @@ int main() {
     gfxInitDefault();
     consoleInit(GFX_BOTTOM, NULL);
 
-    initSocketSerive();
+    initSocketService();
 	atexit(socShutdown);
     curl_global_init(CURL_GLOBAL_DEFAULT);
 

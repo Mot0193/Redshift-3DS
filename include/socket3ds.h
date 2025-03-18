@@ -17,7 +17,7 @@ void socShutdown(void) {
 	socExit();
 }
 
-void initSocketSerive(){
+void initSocketService(){
     // initialize 3DS socket service
 	// from 3ds socket example:
 	// https://github.com/devkitPro/3ds-examples/blob/master/network/sockets/source/sockets.c#L70-L84
