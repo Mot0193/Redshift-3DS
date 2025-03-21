@@ -1,6 +1,8 @@
 #ifndef MESSAGEASSEMBLE_H
 #define MESSAGEASSEMBLE_H
 
+extern LightLock MessageWriterLock;
+
 #include <3ds.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,10 +20,10 @@ C2D_TextBuf text_contentBuf, text_usernameBuf;
 
 C2D_Text contentText, usernameText;
 
-#define MAX_CHAR_PER_MESSAGE_LINE 65
+#define MAX_CHAR_PER_MESSAGE_LINE 60
 #define LQ_IDLENGTH 25 // 24 + 1 for null terminator.. i think. I think im right since with 24 something falls over
 
-#define MAX_REND_MESSAGES 2 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
+#define MAX_REND_MESSAGES 10 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
 
 #define MAX_CHANNEL_QUARK 6 // the max channels or quarks that should get displayed on a *page*
 

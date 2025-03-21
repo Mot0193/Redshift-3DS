@@ -27,6 +27,7 @@ size_t selected_quark = 0;
 size_t selected_channel = 0;
 size_t entered_selected_channel = 0;
 
+LightLock MessageWriterLock;
 
 void printMessageAtIndex(struct MessageStructure *recent_messages, int index) {
     // quick ai-made function for debugging, bite me. Printing is boring
@@ -145,7 +146,9 @@ void WS_reader_thread(void *ws_curl_handle)
         cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
         for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++) {
             if (strcmp(channelId->valuestring, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
+                LightLock_Lock(&MessageWriterLock);
                 addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, json_response);
+                LightLock_Unlock(&MessageWriterLock);
                 break;
             }
         }
@@ -166,7 +169,7 @@ void WS_heartbeat_thread(void *ws_curl_handle){
 
 int main() {
     gfxInitDefault();
-    consoleInit(GFX_BOTTOM, NULL);
+    //consoleInit(GFX_BOTTOM, NULL);
 
     initSocketService();
 	atexit(socShutdown);
@@ -175,6 +178,8 @@ int main() {
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
 	C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
 	C2D_Prepare();
+
+    LightLock_Init(&MessageWriterLock);
 
     C3D_RenderTarget* top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     C3D_RenderTarget* bot = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
@@ -256,12 +261,16 @@ int main() {
 
         C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(top);
-        DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
-        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
-        //C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
-        //C2D_SceneBegin(bot);
+        LightLock_Lock(&MessageWriterLock);
+        DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
+        LightLock_Unlock(&MessageWriterLock);
+
         //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+
+        C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
+        C2D_SceneBegin(bot);
+        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
         
         C3D_FrameEnd(0);
     }
