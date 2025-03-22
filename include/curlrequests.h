@@ -176,8 +176,7 @@ char *curl_lq_sendmessage(const char* token, const char* channelid, const char* 
     return buffer;
 }
 
-
-// [Websocket stuff]
+// --- [Gateway stuff] ---
 
 void print_frame_binary(uint8_t *frame, size_t size) { //debugging function from printing a string (frame) as binary 
     printf("Frame in binary: ");
@@ -316,7 +315,7 @@ void generate_mask(uint8_t mask[4]) {
     }
 }
 
-void send_large_websocket_frame(CURL *curl, const char *message){
+void GW_SendLargeFrame(CURL *curl, const char *message){
     size_t msg_len = strlen(message);
     size_t frame_size = 8 + msg_len; // 1 byte for FIN + RSV + opcode, 1 byte for Mask set
     uint8_t *frame = (uint8_t *)malloc(frame_size);
@@ -363,12 +362,12 @@ void send_large_websocket_frame(CURL *curl, const char *message){
     free(frame);
 }
 
-void send_websocket_frame(CURL *curl, const char *message) {
+void GW_SendFrame(CURL *curl, const char *message) {
     printf("Sending message: %s\n", message);
     size_t msg_len = strlen(message);
     if ((msg_len > 125) && (msg_len <= 65535)){
         printf("Sending Extended Length message\n");
-        send_large_websocket_frame(curl, message);
+        GW_SendLargeFrame(curl, message);
         return;
     } else if(msg_len > 65535) {
         printf("Message too long. Im not sending this\n");
@@ -419,11 +418,11 @@ void send_websocket_frame(CURL *curl, const char *message) {
 
 void unmask_data(uint8_t *data, size_t data_len, uint8_t *mask) {
     for (size_t i = 0; i < data_len; i++) {
-        data[i] ^= mask[i % 4];  // XOR with the mask to unmask the message
+        data[i] ^= mask[i % 4];
     }
 }
 
-void poll_curl_recv(CURL *curl, void *buffer, size_t buflen){
+void curl_PollRecv(CURL *curl, void *buffer, size_t buflen){
     curl_socket_t sockfd;
     CURLcode res = curl_easy_getinfo(curl, CURLINFO_ACTIVESOCKET, &sockfd); //gets the socket
 
@@ -453,19 +452,19 @@ void poll_curl_recv(CURL *curl, void *buffer, size_t buflen){
     return;  // Success
 }
 
-char *receive_websocket_frame(CURL *curl){
+char *GW_ReceiveFrame(CURL *curl){
     uint8_t header[2];
-    poll_curl_recv(curl, header, sizeof(header));
+    curl_PollRecv(curl, header, sizeof(header));
 
     uint8_t opcode = header[0] & 0b00001111;
     uint8_t first_payload_len = header[1] & 0b01111111;
 
     uint64_t payload_len = first_payload_len;
-    printf("Payload length: %lld\n", payload_len);
+    //printf("Payload length: %lld\n", payload_len);
     switch (payload_len){
     case 127:
         uint8_t xl_extended_header[8];
-        poll_curl_recv(curl, xl_extended_header, sizeof(xl_extended_header));
+        curl_PollRecv(curl, xl_extended_header, sizeof(xl_extended_header));
         payload_len = 
                     ((uint64_t)xl_extended_header[0] << 56) | 
                     ((uint64_t)xl_extended_header[1] << 48) |
@@ -479,7 +478,7 @@ char *receive_websocket_frame(CURL *curl){
         break;
     case 126:
         uint8_t extended_header[2];
-        poll_curl_recv(curl, extended_header, sizeof(extended_header));
+        curl_PollRecv(curl, extended_header, sizeof(extended_header));
         payload_len = (extended_header[0] << 8) | extended_header[1];
         printf("Extended (actual) payload length: %lld\n", payload_len);
         break;
@@ -491,17 +490,20 @@ char *receive_websocket_frame(CURL *curl){
         }
     }
     
-    if (payload_len > 4096){ //the size of allocated stack memory for the thread
+    /*
+    For some reason i thought if the message is bigger than the allocated thread memory, it crashes??? Am i dumb? It doesnt crash.
+    if (payload_len > 16 * 1024){ //the size of allocated stack memory for the thread
         printf("RECEIVED WEBSOCKET MESSAGE TOO FAT\n");
         return NULL;
     }
+    */
     
     char * received_payload = malloc(payload_len+1);
     if (received_payload == NULL) {
         printf("Memory allocation for received_payload failed!\n");
         return NULL;
     }
-    poll_curl_recv(curl, received_payload, payload_len);
+    curl_PollRecv(curl, received_payload, payload_len);
 
     switch (opcode) {
     case 1:
@@ -530,6 +532,7 @@ char *receive_websocket_frame(CURL *curl){
         break;
     }
     
+    //print_frame_binary(received_payload, payload_len);
     return NULL;
 }
 

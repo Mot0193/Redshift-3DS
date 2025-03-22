@@ -29,139 +29,52 @@ size_t entered_selected_channel = 0;
 
 LightLock MessageWriterLock;
 
-void printMessageAtIndex(struct MessageStructure *recent_messages, int index) {
-    // quick ai-made function for debugging, bite me. Printing is boring
-    printf("=== Message at Index %d ===\n", index);
-    
-    // Message details
-    printf("Message ID: %s\n", recent_messages[index].message_id);
-    printf("Content: %s\n", recent_messages[index].content ? recent_messages[index].content : "(NULL)");
-    printf("User-Agent: %s\n", recent_messages[index].ua ? recent_messages[index].ua : "(NULL)");
-    printf("Timestamp: %llu\n", recent_messages[index].timestamp);
-    printf("Edited: %s\n", recent_messages[index].edited ? "true" : "false");
-
-    // Author details
-    printf("Author ID: %s\n", recent_messages[index].author_id);
-    printf("Username: %s\n", recent_messages[index].username ? recent_messages[index].username : "(NULL)");
-    printf("Admin: %s\n", recent_messages[index].admin ? "true" : "false");
-    printf("Bot: %s\n", recent_messages[index].isbot ? "true" : "false");
-    printf("SecretThirdThing: %s\n", recent_messages[index].secretThirdThing ? "true" : "false");
-    printf("Avatar URI: %s\n", recent_messages[index].avatarUri ? recent_messages[index].avatarUri : "(NULL)");
-    
-    // Channel ID
-    printf("Channel ID: %s\n", recent_messages[index].channelId);
-
-     // Attachments (only print if they exist)
-     if (recent_messages[index].attachment_count > 0) {
-        printf("Attachments (%d):\n", recent_messages[index].attachment_count);
-        for (int i = 0; i < recent_messages[index].attachment_count; i++) {
-            if (recent_messages[index].attachments[i].url) 
-                printf("  [%d] URL: %s\n", i, recent_messages[index].attachments[i].url);
-            if (recent_messages[index].attachments[i].type) 
-                printf("      Type: %s\n", recent_messages[index].attachments[i].type);
-            if (recent_messages[index].attachments[i].filename) 
-                printf("      Filename: %s\n", recent_messages[index].attachments[i].filename);
-            if (recent_messages[index].attachments[i].size > 0) 
-                printf("      Size: %d bytes\n", recent_messages[index].attachments[i].size);
-            if (recent_messages[index].attachments[i].width > 0 && recent_messages[index].attachments[i].height > 0) 
-                printf("      Dimensions: %dx%d\n", recent_messages[index].attachments[i].width, recent_messages[index].attachments[i].height);
-        }
-    }
-
-    // Special Attributes (only print if they exist)
-    if (recent_messages[index].specialAttribute_count > 0) {
-        printf("Special Attributes (%d):\n", recent_messages[index].specialAttribute_count);
-        for (int i = 0; i < recent_messages[index].specialAttribute_count; i++) {
-            if (recent_messages[index].specialAttributes[i].type) 
-                printf("  [%d] Type: %s\n", i, recent_messages[index].specialAttributes[i].type);
-            if (recent_messages[index].specialAttributes[i].username) 
-                printf("      Username: %s\n", recent_messages[index].specialAttributes[i].username);
-            if (recent_messages[index].specialAttributes[i].avatarUri) 
-                printf("      Avatar URI: %s\n", recent_messages[index].specialAttributes[i].avatarUri);
-            if (recent_messages[index].specialAttributes[i].replyTo[0] != '\0') 
-                printf("      Reply To: %s\n", recent_messages[index].specialAttributes[i].replyTo);
-            if (recent_messages[index].specialAttributes[i].discordMessageId != 0) 
-                printf("      Discord Message ID: %llu\n", recent_messages[index].specialAttributes[i].discordMessageId);
-            if (recent_messages[index].specialAttributes[i].quarkcord) 
-                printf("      Quarkcord: true\n");
-            if (recent_messages[index].specialAttributes[i].plaintext) 
-                printf("      Plaintext: %s\n", recent_messages[index].specialAttributes[i].plaintext);
-        }
-    }
-
-    printf("Content Line Number: %d\n", recent_messages[index].content_line_number);
-    printf("===========================\n");
-}
-
-void printQuarkStruct(struct Quark *quarks, int quark_count) {
-    printf("Displaying Quark Information:\n");
-    
-    for (int i = 0; i < quark_count; i++) {
-        struct Quark *q = &quarks[i];
-        printf("\nQuark #%d:\n", i + 1);
-        printf("  ID: %s\n", q->quark_id);
-        printf("  Name: %s\n", q->name);
-        printf("  Icon URI: %s\n", q->iconUri ? q->iconUri : "None");
-        printf("  Invite Link: %s\n", q->inviteEnabled ? q->invite : "Invites Disabled");
-
-        // Display Owners
-        if (q->owners_count > 0 && q->owners != NULL) {
-            printf("  Owners (%d): ", q->owners_count);
-            for (int j = 0; j < q->owners_count; j++) {
-                printf("%s%s", q->owners[j], (j < q->owners_count - 1) ? ", " : "");
-            }
-            printf("\n");
-        } else {
-            printf("  Owners: None\n");
-        }
-
-        // Display Channels
-        printf("  Channels (%d):\n", q->channels_count);
-        if (q->channels_count > 0 && q->channels != NULL) {
-            for (int k = 0; k < q->channels_count; k++) {
-                struct Channel *c = &q->channels[k];
-                printf("    - [%s] %s\n", c->channel_id, c->name);
-                printf("      Description: %s\n", c->description ? c->description : "No description");
-            }
-        } else {
-            printf("    No channels available.\n");
-        }
-    }
-}
-
 volatile bool runThreads = true;
-void WS_reader_thread(void *ws_curl_handle)
+void GW_reader_thread(void *ws_curl_handle)
 {
     printf("Reader Thread started!\n");
+    uint16_t eventnumber = 0;
 	while (runThreads)
 	{
-        char * received_payload = receive_websocket_frame(ws_curl_handle);
+        char * received_payload = GW_ReceiveFrame(ws_curl_handle);
         if (!received_payload) continue;
 
-        cJSON *json_response = jsonGatewayReader(received_payload);
+        cJSON *json_response = GW_EventReader(received_payload, &eventnumber);
         free(received_payload);
 
         if (!json_response) continue;
 
-        cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
-        for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++) {
-            if (strcmp(channelId->valuestring, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
-                LightLock_Lock(&MessageWriterLock);
-                addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, json_response);
-                LightLock_Unlock(&MessageWriterLock);
-                break;
+        switch (eventnumber)
+        {
+        case 0: //rpc
+            printf(cJSON_PrintUnformatted(json_response));
+            break;
+        case 1: //messageCreate
+            cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
+            for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++) {
+                if (strcmp(channelId->valuestring, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
+            
+                    LightLock_Lock(&MessageWriterLock);
+                    addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, json_response);
+                    LightLock_Unlock(&MessageWriterLock);
+                    break;
+                }
             }
+            break;
+        default:
+            break;
         }
+        
 
         cJSON_Delete(json_response);
 	}
 }
 
-void WS_heartbeat_thread(void *ws_curl_handle){
+void GW_heartbeat_thread(void *ws_curl_handle){
     printf("Heartbeat Thread started!\n");
 	while (runThreads)
 	{
-        send_websocket_frame(ws_curl_handle, "{\"event\": \"heartbeat\",\"state\": \"\"}");
+        GW_SendFrame(ws_curl_handle, "{\"event\": \"heartbeat\",\"state\": \"\"}");
         printf("Sent heartbeat!\n");
         svcSleepThread(50*1000000000ULL); // delay 50 seconds x 1 sec in ns
 	}
@@ -169,7 +82,7 @@ void WS_heartbeat_thread(void *ws_curl_handle){
 
 int main() {
     gfxInitDefault();
-    //consoleInit(GFX_BOTTOM, NULL);
+    consoleInit(GFX_BOTTOM, NULL);
 
     initSocketService();
 	atexit(socShutdown);
@@ -192,17 +105,17 @@ int main() {
     char *token = parse_response(auth_response, "access_token"); //get token
 
     printf("Requesting quarks...\n");
-    char *quarks_response = curlRequest("https://lightquark.network/v4/quark", NULL, token);
+    char *quarks_response = curlRequest("https://lightquark.network/v4/quark", NULL, token); //get quarks 
     addQuarksToArray(&joined_quarks, quarks_response);
 
-    CURL *curl_WS_handle = curlUpgradeGateway(GATEWAY_URL); //upgrde to gateway (WebSocket)
-    char ws_auth[256];
-    sprintf(ws_auth,"{\"event\": \"authenticate\", \"token\": \"%s\", \"state\": \"\"}", token);
-    send_websocket_frame(curl_WS_handle, ws_auth); //auth with gateway
+    CURL *curl_GW_handle = curlUpgradeGateway(GATEWAY_URL); //upgrde to gateway (WebSocket)
+    char gw_auth[256];
+    sprintf(gw_auth,"{\"event\": \"authenticate\", \"token\": \"%s\", \"state\": \"\"}", token);
+    GW_SendFrame(curl_GW_handle, gw_auth); //auth with gateway
 
-    Thread thread_WS_reader = threadCreate(WS_reader_thread, curl_WS_handle, 4096, 0x2E, -2, false); //start the thread that reads incoming gateway messages
-    Thread thread_WS_heartbeat = threadCreate(WS_heartbeat_thread, curl_WS_handle, 1024, 0x2F, -2, false); //start heartbeat thread
-
+    Thread thread_GW_reader = threadCreate(GW_reader_thread, curl_GW_handle, 4 * 1024, 0x2E, -2, false); //start the thread that reads incoming gateway messages
+    Thread thread_GW_heartbeat = threadCreate(GW_heartbeat_thread, curl_GW_handle, 1024, 0x2F, -2, false); //start heartbeat thread
+    
     float scroll_offset = 0;
 
     bool channel_select = false;
@@ -216,6 +129,8 @@ int main() {
 
         if (kDown & KEY_START) break; // Exit on START button
         if (kDown & KEY_A){
+            //for testing
+            GW_SendFrame(curl_GW_handle, GW_LQAssembleGetMessages(token, "638b815b4d55b470d9d6fa19", NULL, NULL, 1));
         }
         if (kDown & KEY_B){
         }
@@ -266,11 +181,11 @@ int main() {
         DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
         LightLock_Unlock(&MessageWriterLock);
 
-        //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
-
-        C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
-        C2D_SceneBegin(bot);
         DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+
+        //C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
+        //C2D_SceneBegin(bot);
+        //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
         
         C3D_FrameEnd(0);
     }
@@ -281,13 +196,13 @@ int main() {
 
     runThreads = false;
 
-    threadJoin(thread_WS_reader, 1000000000);
-    threadFree(thread_WS_reader);
+    threadJoin(thread_GW_reader, 1000000000);
+    threadFree(thread_GW_reader);
 
-    threadJoin(thread_WS_heartbeat, 1000000000);
-    threadFree(thread_WS_heartbeat);
+    threadJoin(thread_GW_heartbeat, 1000000000);
+    threadFree(thread_GW_heartbeat);
 
-    curl_easy_cleanup(curl_WS_handle);
+    curl_easy_cleanup(curl_GW_handle);
 
     gfxExit();
     return 0;
