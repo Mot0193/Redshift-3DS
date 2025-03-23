@@ -74,11 +74,9 @@ void GW_reader_thread(void *ws_curl_handle)
 
                 if (strcmp(state_token, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
 
-                    for (int j = messages_arraysize; j >= 0; j--){
-                        // is this too overcomplicated i dont know
+                    for (int j = messages_arraysize-1; j >= 0; j--){
+                        // is this too overcomplicated i dont know. I feel like i could have a seperate addmessages function instead of trying to use the same function by making a compatible json obect
                         cJSON *message = cJSON_GetArrayItem(messages, j);
-                        
-                        printf("Adding single mesage to message json object..\n");
                         if (!message) {
                             printf("Message at index %d is NULL!\n", j);
                             continue;
@@ -139,7 +137,7 @@ void GW_heartbeat_thread(void *ws_curl_handle){
 
 int main() {
     gfxInitDefault();
-    consoleInit(GFX_BOTTOM, NULL);
+    //consoleInit(GFX_BOTTOM, NULL);
 
     initSocketService();
 	atexit(socShutdown);
@@ -186,8 +184,8 @@ int main() {
 
         if (kDown & KEY_START) break; // Exit on START button
         if (kDown & KEY_A){
-            //for testing
-            GW_SendFrame(curl_GW_handle, GW_LQAssembleGetMessages(token, "638b815b4d55b470d9d6fa19", NULL, NULL, 5));
+            // get recent messages in selected channel on A press
+            GW_SendFrame(curl_GW_handle, GW_LQAssembleGetMessages(token, selected_channel_id, NULL, NULL, 10));
         }
         if (kDown & KEY_B){
         }
@@ -196,7 +194,7 @@ int main() {
 
 
         if (abs(CPadPos.dy) >= 15){
-            scroll_offset += -1 * (CPadPos.dy / 30);
+            scroll_offset += -1 * (CPadPos.dy / 24);
         }
 
         
@@ -238,11 +236,11 @@ int main() {
         DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
         LightLock_Unlock(&MessageWriterLock);
 
-        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
-
-        //C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
-        //C2D_SceneBegin(bot);
         //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+
+        C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 255));
+        C2D_SceneBegin(bot);
+        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
         
         C3D_FrameEnd(0);
     }

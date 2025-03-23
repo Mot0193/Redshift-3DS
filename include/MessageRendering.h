@@ -139,13 +139,6 @@ void freeQuarks(struct Quark **joined_quarks){
         for(int j = 0; j < (*joined_quarks)[i].channels_count; j++){
             free((*joined_quarks)[i].channels[j].name);
             free((*joined_quarks)[i].channels[j].description);
-
-            /*
-            Ugh now i realize why people sperate header files from source files for libraries
-            for (int k = 0; k < (*joined_quarks)[i].channels[j].total_messages; k++) {
-                freeMessageArrayAtIndex((*joined_quarks)[i].channels[j].messages, k);
-            }
-            */
         }
 
         free((*joined_quarks)[i].channels);
@@ -446,7 +439,6 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 
     char *wrappedContent = NULL;
     if (strlen(content->valuestring) > MAX_CHAR_PER_MESSAGE_LINE) {
-        printf("Message too long, wrapping message...\n");
         wrappedContent = strdup(WrappedMessage(content->valuestring));
     } else {
         wrappedContent = strdup(content->valuestring);
