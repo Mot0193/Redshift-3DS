@@ -447,21 +447,19 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
     char *wrappedContent = NULL;
     if (strlen(content->valuestring) > MAX_CHAR_PER_MESSAGE_LINE) {
         printf("Message too long, wrapping message...\n");
-        wrappedContent = WrappedMessage(content->valuestring);
+        wrappedContent = strdup(WrappedMessage(content->valuestring));
     } else {
         wrappedContent = strdup(content->valuestring);
     }
 
     int content_lines = countLines(content->valuestring);
     int message_index = channel_struct->message_index;
-    //int total_messages = channel_struct->total_messages;
 
-    printf("Freeing message array...\n");
     freeMessageArrayAtIndex(channel_struct->messages, message_index);
-    printf("Fred message\n"); // who is Fred
+
 
     snprintf(channel_struct->messages[message_index].message_id, sizeof(channel_struct->messages[message_index].message_id), "%s", message_id->valuestring);
-    channel_struct->messages[message_index].content = strdup(wrappedContent);
+    channel_struct->messages[message_index].content = wrappedContent;
     channel_struct->messages[message_index].ua = strdup(ua->valuestring);
     channel_struct->messages[message_index].timestamp = timestamp->valuedouble;
     channel_struct->messages[message_index].edited = cJSON_IsTrue(edited);
@@ -549,7 +547,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
         channel_struct->total_messages++;
     }
 
-    printf("!!! Done adding message\n");
+    //printf("!!! Done adding message\n");
 }
 
 // --- --- [ RENDERING ] --- ---

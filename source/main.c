@@ -46,10 +46,67 @@ void GW_reader_thread(void *ws_curl_handle)
 
         switch (eventnumber)
         {
-        case 0: //rpc
-            printf(cJSON_PrintUnformatted(json_response));
+        case 0: //rpc --- --- ---
+            //printf(cJSON_PrintUnformatted(json_response));
+            cJSON *state = cJSON_GetObjectItem(json_response, "state");
+
+            char *state_token;
+            state_token = strtok(state->valuestring, ".");
+
+            
+            if (strcmp(state_token, "GetMessages") != 0){
+                printf("Unknown State String for RPC message\n");
+                goto rpc_abort;
+            }
+            state_token = strtok(NULL, ".");
+            printf("State Thing Id: %s\n", state_token);
+
+            cJSON *body = cJSON_GetObjectItem(json_response, "body");
+            cJSON *response = cJSON_GetObjectItem(body, "response");
+            cJSON *messages = cJSON_GetObjectItem(response, "messages");
+            int messages_arraysize = cJSON_GetArraySize(messages);
+            if (!messages || !cJSON_IsArray(messages) || messages_arraysize == 0) {
+                printf("RPC Messages array doesn't exist or it's empty wtf\n");
+                goto rpc_abort;
+            }
+
+            for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++) {
+
+                if (strcmp(state_token, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
+
+                    for (int j = messages_arraysize; j >= 0; j--){
+                        // is this too overcomplicated i dont know
+                        cJSON *message = cJSON_GetArrayItem(messages, j);
+                        
+                        printf("Adding single mesage to message json object..\n");
+                        if (!message) {
+                            printf("Message at index %d is NULL!\n", j);
+                            continue;
+                        }
+
+                        cJSON *single_message = cJSON_CreateObject();
+                        cJSON_AddItemToObject(single_message, "message", cJSON_Duplicate(message, 1));
+                        cJSON *channelId = cJSON_CreateString(joined_quarks[selected_quark].channels[i].channel_id);
+                        cJSON_AddItemToObject(single_message, "channelId", channelId);
+                        if (!single_message){
+                            printf("Fuck created single_message is NULL");
+                            continue;
+                        }
+
+                        LightLock_Lock(&MessageWriterLock);
+                        addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, single_message);
+                        LightLock_Unlock(&MessageWriterLock);
+
+                        cJSON_Delete(single_message);
+                    }
+                    break;
+                }
+            }
+
+            rpc_abort:
             break;
-        case 1: //messageCreate
+
+        case 1: //messageCreate --- --- ---
             cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
             for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++) {
                 if (strcmp(channelId->valuestring, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
@@ -130,7 +187,7 @@ int main() {
         if (kDown & KEY_START) break; // Exit on START button
         if (kDown & KEY_A){
             //for testing
-            GW_SendFrame(curl_GW_handle, GW_LQAssembleGetMessages(token, "638b815b4d55b470d9d6fa19", NULL, NULL, 1));
+            GW_SendFrame(curl_GW_handle, GW_LQAssembleGetMessages(token, "638b815b4d55b470d9d6fa19", NULL, NULL, 5));
         }
         if (kDown & KEY_B){
         }
