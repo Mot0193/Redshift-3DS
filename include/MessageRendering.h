@@ -452,7 +452,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
         wrappedContent = strdup(content->valuestring);
     }
 
-    int content_lines = countLines(content->valuestring);
+
     int message_index = channel_struct->message_index;
 
     freeMessageArrayAtIndex(channel_struct->messages, message_index);
@@ -472,7 +472,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
     channel_struct->messages[message_index].avatarUri = strdup(avatarUri->valuestring);
 
     snprintf(channel_struct->messages[message_index].channelId, sizeof(channel_struct->messages[message_index].channelId), "%s", channelId->valuestring);
-    channel_struct->messages[message_index].content_line_number = content_lines;
+    channel_struct->messages[message_index].content_line_number = countLines(wrappedContent);
 
     
     // Attachments ----
@@ -586,7 +586,7 @@ void DrawStructuredMessage(struct Channel *channel_struct, int array_size, float
             C2D_TextOptimize(&contentText);
             C2D_DrawText(&contentText, C2D_WithColor, 0.0f, total_messages_height + scrolling_offset, 0.0f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
             
-            float message_height = channel_struct->messages[message_arr_index].content_line_number * 15; //todo make this use C2D_TextGetDimensions. Might require seperating each message/username into its own buffer/buffer array index. See DrawQuarks
+            float message_height = channel_struct->messages[message_arr_index].content_line_number * 15; //todo make this use C2D_TextGetDimensions. Might require seperating each message/username into its own buffer/buffer array index. See DrawQuarks for working example
             total_messages_height += message_height;
         }
     }
