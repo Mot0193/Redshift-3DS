@@ -274,7 +274,8 @@ int countLines(const char *wrappedMessage) {
 }
 
 void freeHELPMessageArrayAtIndex(struct MessageStructure *messages, int index) {
-    // slowly prints each time it fees something, used for debugging, i will get rid of this eventually
+    // slowly prints each time it frees something, used for debugging, i will get rid of this eventually   
+    // im so good at debugging
     if (!messages) {
         return;
     }
@@ -594,7 +595,7 @@ void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int 
             quarkBuf = C2D_TextBufNew(total_quarks_name_size);
         }
 
-        //int total_pages = (joined_quark_count + MAX_CHANNEL_QUARK - 1) / MAX_CHANNEL_QUARK; // determine number of pages (starts at 0) //nvm i dont need this
+        //int total_pages = (joined_quark_count + MAX_CHANNEL_QUARK - 1) / MAX_CHANNEL_QUARK; // determine number of pages (starts at 0) //nvm i dont need this //nvm i might need this if i want to display pages
         int current_page = selected_quark / MAX_CHANNEL_QUARK; // the current page the selected quark is on
 
         int start_index = current_page * MAX_CHANNEL_QUARK;
@@ -654,5 +655,6 @@ void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int 
         }
     }
 }
+
 
 #endif

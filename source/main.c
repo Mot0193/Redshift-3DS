@@ -135,9 +135,15 @@ void GW_heartbeat_thread(void *ws_curl_handle){
 	}
 }
 
+bool touchingArea(touchPosition touch, touchPosition target1, touchPosition target2){
+    if (touch.px >= target1.px && touch.px <= target2.px && touch.py >= target1.py && touch.py <= target2.py){
+        return true;
+    } else return false;
+}
+
 int main() {
     gfxInitDefault();
-    //consoleInit(GFX_BOTTOM, NULL);
+    //consoleInit(GFX_TOP, NULL);
 
     initSocketService();
 	atexit(socShutdown);
@@ -172,8 +178,10 @@ int main() {
     Thread thread_GW_heartbeat = threadCreate(GW_heartbeat_thread, curl_GW_handle, 1024, 0x2F, -2, false); //start heartbeat thread
     
     float scroll_offset = 0;
-
     bool channel_select = false;
+
+    touchPosition target1; target1.px = 1; target1.py = 1;
+    touchPosition target2; target2.px = 320; target2.py = 50;
     while (aptMainLoop()) {
         hidScanInput();
         u32 kDown = hidKeysDown();
@@ -183,9 +191,32 @@ int main() {
         hidCircleRead(&CPadPos);
 
         if (kDown & KEY_START) break; // Exit on START button
+
+        touchPosition touch;
+        hidTouchRead(&touch);
+
+        if (touchingArea(touch, target1, target2) == true){
+            printf("Touched Button!\n");
+
+            SwkbdState swkbd;
+            char sendingmessage_buffer[512];
+            SwkbdButton button = SWKBD_BUTTON_NONE;
+
+            swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 1, -1);
+            swkbdSetHintText(&swkbd, "Send message in selected channel");
+            button = swkbdInputText(&swkbd, sendingmessage_buffer, sizeof(sendingmessage_buffer)); 
+
+            // if button = "ok" and the string is not empty
+            if (button == SWKBD_BUTTON_RIGHT && sendingmessage_buffer[0] != '\0'){
+                printf("Sending message:\n%s\n", sendingmessage_buffer);
+                curl_lq_sendmessage(token, selected_channel_id, sendingmessage_buffer, NULL, true);
+            }
+        }
+
         if (kDown & KEY_A){
             // get recent messages in selected channel on A press
             GW_SendFrame(curl_GW_handle, GW_LQAssembleGetMessages(token, selected_channel_id, NULL, NULL, 10));
+            
         }
         if (kDown & KEY_B){
         }

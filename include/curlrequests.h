@@ -12,7 +12,9 @@
 #include <stdint.h> 
 #include <stddef.h>
 
+#define CLIENT_NAME "Redshift3DS"
 
+// AAAA everything here needs a re-write this is horrible
 
 size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
     size_t total_size = size * nmemb;
@@ -106,7 +108,9 @@ char *curl_lq_sendmessage(const char* token, const char* channelid, const char* 
         struct curl_slist *headers = NULL;
         headers = curl_slist_append(headers, "Content-Type: multipart/form-data"); //append the Content-Type header
 
-        headers = curl_slist_append(headers, "lq-agent: Your Wi-Fi"); //append lq-agent
+        char agent_header[32];
+        snprintf(agent_header, sizeof(agent_header), "lq-agent: %s", CLIENT_NAME);
+        headers = curl_slist_append(headers, agent_header); //append lq-agent
 
         char auth_header[512];
         snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", token); 
