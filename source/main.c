@@ -204,12 +204,14 @@ int main() {
 
             swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 1, -1);
             swkbdSetHintText(&swkbd, "Send message in selected channel");
+            swkbdSetFeatures(&swkbd, SWKBD_PREDICTIVE_INPUT); // trying this out, might be useful
+            swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Cancel", false);
             button = swkbdInputText(&swkbd, sendingmessage_buffer, sizeof(sendingmessage_buffer)); 
 
             // if button = "ok" and the string is not empty
             if (button == SWKBD_BUTTON_RIGHT && sendingmessage_buffer[0] != '\0'){
                 printf("Sending message:\n%s\n", sendingmessage_buffer);
-                curl_lq_sendmessage(token, selected_channel_id, sendingmessage_buffer, NULL, true);
+                curl_lq_sendmessage(token, selected_channel_id, sendingmessage_buffer, NULL, true); // todo: use a thread event thingy so the program doesnt freeze
             }
         }
 
