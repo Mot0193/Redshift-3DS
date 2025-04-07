@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <unistd.h>
 
@@ -28,6 +30,44 @@ size_t selected_channel = 0;
 size_t entered_selected_channel = 0;
 
 LightLock MessageWriterLock;
+
+FILE *loginfile;
+
+int LightquarkLogin(){
+
+    loginfile = fopen("\\3ds\\redshift\\logindata.txt", "a+");
+    if (loginfile == NULL){
+        printf("logindata file does not exist, making directory...\n");
+
+        if (mkdir("\\3ds\\redshift\\logindata.txt", 0775) == -1){
+            printf("Failed to make data directory :(\n");
+            return -1;
+        } 
+        else {
+            loginfile = fopen("\\3ds\\redshift\\logindata.txt", "a+");
+            if (loginfile == NULL) {
+                printf("nah i give up\n");
+                return -1;
+            }
+        }
+    }
+    
+    char faccesstoken[89];
+    char frefreshtoken[82];
+    char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", LOGIN_DATA, NULL); //login
+    char *access_token = parse_response(auth_response, "access_token"); //get token
+    char *refresh_token = parse_response(auth_response, "refresh_token");
+
+    printf("AC: %s\n", access_token);
+    printf("RE: %s\n", refresh_token);
+    fprintf(loginfile, access_token);
+    fprintf(loginfile, refresh_token);
+
+    printf("done writing tokens to file\n");
+    fclose(loginfile);
+    return 0;
+
+}
 
 volatile bool runThreads = true;
 void GW_reader_thread(void *ws_curl_handle)
@@ -143,7 +183,7 @@ bool touchingArea(touchPosition touch, touchPosition target1, touchPosition targ
 
 int main() {
     gfxInitDefault();
-    //consoleInit(GFX_TOP, NULL);
+    consoleInit(GFX_TOP, NULL);
 
     initSocketService();
 	atexit(socShutdown);
@@ -223,6 +263,7 @@ int main() {
         if (kDown & KEY_B){
         }
         if (kDown & KEY_Y){
+            LightquarkLogin();
         }
 
 
@@ -262,12 +303,12 @@ int main() {
         
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
-        C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
-        C2D_SceneBegin(top);
+        //C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+        //C2D_SceneBegin(top);
 
-        LightLock_Lock(&MessageWriterLock);
-        DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
-        LightLock_Unlock(&MessageWriterLock);
+        //LightLock_Lock(&MessageWriterLock);
+        //DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
+        //LightLock_Unlock(&MessageWriterLock);
 
         //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
@@ -277,6 +318,7 @@ int main() {
         
         C3D_FrameEnd(0);
     }
+    exitredshift:
     printf("Exiting...");
 
     C2D_TextBufDelete(text_contentBuf);
