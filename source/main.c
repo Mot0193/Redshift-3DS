@@ -35,38 +35,43 @@ FILE *loginfile;
 
 int LightquarkLogin(){
 
-    loginfile = fopen("\\3ds\\redshift\\logindata.txt", "a+");
-    if (loginfile == NULL){
-        printf("logindata file does not exist, making directory...\n");
-
-        if (mkdir("\\3ds\\redshift\\logindata.txt", 0775) == -1){
-            printf("Failed to make data directory :(\n");
-            return -1;
-        } 
-        else {
-            loginfile = fopen("\\3ds\\redshift\\logindata.txt", "a+");
-            if (loginfile == NULL) {
-                printf("nah i give up\n");
-                return -1;
-            }
-        }
+    if (mkdir("/3ds/redshift", 0775) == -1) {
+        printf("Warning: redshift dir may already exist or failed to create\n");
+    } else {
+        printf("Created /3ds/redshift directory\n");
     }
-    
-    char faccesstoken[89];
-    char frefreshtoken[82];
-    char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", LOGIN_DATA, NULL); //login
-    char *access_token = parse_response(auth_response, "access_token"); //get token
+
+    loginfile = fopen("/3ds/redshift/logindata.txt", "w+");
+    if (loginfile == NULL) {
+        printf("Failed to open logindata.txt for writing.\n");
+        return -1;
+    }
+
+    char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", LOGIN_DATA, NULL); //request login
+    char *access_token = parse_response(auth_response, "access_token"); //get token(s)
     char *refresh_token = parse_response(auth_response, "refresh_token");
 
-    printf("AC: %s\n", access_token);
-    printf("RE: %s\n", refresh_token);
-    fprintf(loginfile, access_token);
-    fprintf(loginfile, refresh_token);
+    if (access_token && refresh_token) {
+        printf("AC: %s\n", access_token);
+        printf("RE: %s\n", refresh_token);
+        fprintf(loginfile, "%s\n", access_token);
+        fprintf(loginfile, "%s\n", refresh_token);
+        printf("Done writing tokens to file.\n");
 
-    printf("done writing tokens to file\n");
+        fflush(loginfile);
+        fseek(loginfile, 0, SEEK_SET);
+        char buffer[256];
+        
+        printf("Tokens read from file:\n");
+        while (fgets(buffer, sizeof(buffer), loginfile)) {
+            printf("%s\n", buffer); // print the tokens from the file
+        }
+    } else {
+        printf("Failed to parse tokens.\n");
+    }
+
     fclose(loginfile);
     return 0;
-
 }
 
 volatile bool runThreads = true;
@@ -222,7 +227,7 @@ int main() {
 
     touchPosition target1; target1.px = 1; target1.py = 1;
     touchPosition target2; target2.px = 320; target2.py = 50;
-    while (aptMainLoop()) {
+           while (aptMainLoop()) {
         hidScanInput();
         u32 kDown = hidKeysDown();
         //u32 kDown = hidKeysHeld();
@@ -318,7 +323,7 @@ int main() {
         
         C3D_FrameEnd(0);
     }
-    exitredshift:
+    //exitredshift:
     printf("Exiting...");
 
     C2D_TextBufDelete(text_contentBuf);
