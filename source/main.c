@@ -39,9 +39,15 @@ CURL *curl_GW_handle;
 
 int LightquarkLogin(){
 
-    mkdir("/3ds/redshift", 0775);
+    if (mkdir("/3ds/redshift", 0775) == -1){
+        if (errno != EEXIST) {
+            perror("Failed to create /3ds/redshift");
+            return -1;
+        }
+    }
     perror("/3ds/redshift Directory status");
 
+    attempt_login:
     loginfile = fopen("/3ds/redshift/logindata.txt", "r");
     if (loginfile == NULL) {
         goto blank_login;
@@ -79,29 +85,41 @@ int LightquarkLogin(){
         printf("Too many attempts to log in, bye bye\n");
         return -1;
     }
+
     printf("Creating logindata file...\n");
 
-    loginfile = fopen("/3ds/redshift/logindata.txt", "w+");
+    loginfile = fopen("/3ds/redshift/logindata.txt", "w");
     if (loginfile == NULL) {
         perror("Error creating logindata file");
         return -1;
     }
 
+    printf("Requesting Tokens...\n");
     char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", LOGIN_DATA, NULL); //request login
+
+    printf("Parsing tokens...\n");
     char *ACtoken = parse_response(auth_response, "access_token"); //get token(s)
     char *REtoken = parse_response(auth_response, "refresh_token");
 
+    if (ACtoken == NULL || REtoken == NULL) {
+        printf("Error: One of the parsed tokens is NULL!\n");
+        fclose(loginfile);
+        return -1;
+    }
+    
     if (ACtoken && REtoken) {
         printf("AC: %s\n", ACtoken);
         printf("RE: %s\n", REtoken);
+
         fprintf(loginfile, "%s\n", ACtoken);
         fprintf(loginfile, "%s\n", REtoken);
-        printf("Done writing tokens to file.\n");
 
-        fseek(loginfile, 0, SEEK_SET);
-        
+        printf("Done writing tokens to file.\n");
+        fclose(loginfile);
+        goto attempt_login;
     } else {
         printf("Failed to parse login tokens.\n");
+        fclose(loginfile);
         return -1;
     }
 
@@ -223,7 +241,7 @@ bool touchingArea(touchPosition touch, touchPosition target1, touchPosition targ
 
 int main() {
     gfxInitDefault();
-    //consoleInit(GFX_TOP, NULL);
+    consoleInit(GFX_TOP, NULL);
 
     initSocketService();
 	atexit(socShutdown);
@@ -243,6 +261,7 @@ int main() {
 
 
     if (LightquarkLogin() != 0){
+        usleep(1000 * 1000);
         goto exit_redshift;
     }
 
@@ -268,8 +287,6 @@ int main() {
         hidTouchRead(&touch);
 
         if (touchingArea(touch, target1, target2) == true){
-            printf("Touched Button!\n");
-
             SwkbdState swkbd;
             char sendingmessage_buffer[512];
             SwkbdButton button = SWKBD_BUTTON_NONE;
@@ -335,12 +352,12 @@ int main() {
         
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
-        C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
-        C2D_SceneBegin(top);
+        //C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+        //C2D_SceneBegin(top);
 
-        LightLock_Lock(&MessageWriterLock);
-        DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
-        LightLock_Unlock(&MessageWriterLock);
+        //LightLock_Lock(&MessageWriterLock);
+        //DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
+        //LightLock_Unlock(&MessageWriterLock);
 
         //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
