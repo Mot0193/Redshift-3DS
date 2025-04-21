@@ -16,70 +16,90 @@
 
 // AAAA everything here needs a re-write this is horrible
 
-size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
-    size_t total_size = size * nmemb;
-    snprintf((char *)userdata + strlen((char *)userdata), total_size + 1, "%s", (char *)ptr);
-    return total_size;
+struct response {
+    char *memory;
+    size_t size;
+};
+
+static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+  size_t realsize = size * nmemb;
+  struct response *mem = (struct response *)userp;
+
+  char *ptr = realloc(mem->memory, mem->size + realsize + 1);
+  if(!ptr) {
+    /* out of memory! */
+    printf("not enough memory (realloc returned NULL)\n");
+    return 0;
+  }
+
+  mem->memory = ptr;
+  memcpy(&(mem->memory[mem->size]), contents, realsize);
+  mem->size += realsize;
+  mem->memory[mem->size] = 0;
+
+  return realsize;
 }
+
+/*size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
+    size_t total_size = size * nmemb;
+    strncat((char *)userdata, (char *)ptr, total_size);
+    return total_size;
+}*/
 
 char *curlRequest(const char* url, const char* postdata, const char* token) {
     printf("curl_request URL: %s\n", url);
     CURL *curl;
     CURLcode res;
-    char *buffer = (char *)malloc(8 * 1024); // Buffer to store the response
-    // Initialize curl
+    struct response chunk= {.memory = malloc(0), .size = 0};
+
     curl = curl_easy_init();
 
-    if (curl) {
-        // Set the URL
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-
-        struct curl_slist *headers = NULL;
-        headers = curl_slist_append(headers, "Content-Type: application/json"); //append the Content-Type header
-
-        headers = curl_slist_append(headers, "lq-agent: Your Wi-Fi"); //append lq-agent
-        
-        if (token != NULL){
-            char auth_header[512];
-            snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", token); 
-            headers = curl_slist_append(headers, auth_header); //append the Authorization header
-            printf("Auth header set!\n");
-        }
-
-
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers); //set headers
-
-        if (postdata != NULL){
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata); //sets the json post data
-        }
-        
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
-
-        // Set the callback function to handle the response data
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)buffer);
-
-        // Disable SSL certificate verification
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-
-        // Perform the GET request
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L); // 1L for debug info, 0L for off
-        printf("Curl performing...\n");
-        res = curl_easy_perform(curl);
-        printf("Curl performed!\n");
-        if(res != CURLE_OK) {
-            printf("curl perform Error when requesting: %s\n", curl_easy_strerror(res));
-            free(buffer);
-            buffer = NULL;
-            return NULL;
-        }
-        
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
+    if (!curl) {
+        free(chunk.memory);
+        return NULL;
     }
-    return buffer;
+
+    curl_easy_setopt(curl, CURLOPT_URL, url); //set url 
+
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json"); //append the Content-Type header
+    headers = curl_slist_append(headers, "lq-agent: Your Wi-Fi"); //append lq-agent
+    
+    if (token != NULL){
+        char auth_header[512];
+        snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", token); 
+        headers = curl_slist_append(headers, auth_header); //append the Authorization header
+    }
+
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers); //set headers
+
+    if (postdata != NULL){
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata); //sets the json post data
+    }
+    
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L); 
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L); // 1L for debug info, 0L for off
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&chunk);
+
+    printf("Curl performing...\n");
+    res = curl_easy_perform(curl);
+    if(res != CURLE_OK) {
+        printf("curl perform Error: %s\n", curl_easy_strerror(res));
+        free(chunk.memory);
+        chunk.memory = NULL;
+        return NULL;
+    }
+    
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    return chunk.memory; //dont forget to free this dumbass
 }
 
 char *curl_lq_sendmessage(const char* token, const char* channelid, const char* message, const char* replyto, const bool printoutput){
