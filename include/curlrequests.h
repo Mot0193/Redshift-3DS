@@ -14,8 +14,6 @@
 
 #define CLIENT_NAME "Redshift3DS"
 
-// AAAA everything here needs a re-write this is horrible
-
 struct response {
     char *memory;
     size_t size;
@@ -47,8 +45,8 @@ static size_t write_callback(void *contents, size_t size, size_t nmemb, void *us
     return total_size;
 }*/
 
-char *curlRequest(const char* url, const char* postdata, const char* token) {
-    printf("curl_request URL: %s\n", url);
+char *curlRequest(const char* url, const char* postdata, const char* token, long* httpcodeout) {
+    //printf("curl_request URL: %s\n", url);
     CURL *curl;
     CURLcode res;
     struct response chunk= {.memory = malloc(0), .size = 0};
@@ -64,7 +62,9 @@ char *curlRequest(const char* url, const char* postdata, const char* token) {
 
     struct curl_slist *headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json"); //append the Content-Type header
-    headers = curl_slist_append(headers, "lq-agent: Your Wi-Fi"); //append lq-agent
+    char agent_header[32];
+    snprintf(agent_header, sizeof(agent_header), "lq-agent: %s", CLIENT_NAME);
+    headers = curl_slist_append(headers, agent_header); //append lq-agent // do i even need to append this for things like this? o well
     
     if (token != NULL){
         char auth_header[512];
@@ -82,20 +82,21 @@ char *curlRequest(const char* url, const char* postdata, const char* token) {
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L); // 1L for debug info, 0L for off
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
 
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&chunk);
 
-    printf("Curl performing...\n");
     res = curl_easy_perform(curl);
     if(res != CURLE_OK) {
         printf("curl perform Error: %s\n", curl_easy_strerror(res));
         free(chunk.memory);
-        chunk.memory = NULL;
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
         return NULL;
     }
     
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, httpcodeout);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 

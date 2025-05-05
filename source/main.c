@@ -39,6 +39,7 @@ CURL *curl_GW_handle;
 
 int LightquarkLogin(){
     int login_retry = 0;
+    long httpcodecurl = 0;
 
     if (mkdir("/3ds/redshift", 0775) == -1){
         if (errno != EEXIST) {
@@ -48,7 +49,7 @@ int LightquarkLogin(){
     }
     perror("/3ds/redshift Directory status");
 
-    goto blank_login;
+    // --- ---- ---
     attempt_login:
     loginfile = fopen("/3ds/redshift/logindata.txt", "r");
     if (loginfile == NULL) {
@@ -59,16 +60,18 @@ int LightquarkLogin(){
     accesstoken[strcspn(accesstoken, "\n")] = '\0';
     printf("Access Token saved from file: %s\n", accesstoken);
 
-    char *quarks_response = curlRequest("https://lightquark.network/v4/quark", NULL, accesstoken); //get quarks 
-    if (quarks_response != NULL) addQuarksToArray(&joined_quarks, quarks_response);
-    else {
-        printf("Uh oh quarks response is null\n");
+    char *quarks_response = curlRequest("https://lightquark.network/v4/quark", NULL, accesstoken, &httpcodecurl); //get quarks
+    printf("Quark Response HTTP code: %li\n", httpcodecurl);
+    if (httpcodecurl != 200){
+        goto refresh_login; // if code is not ok, aka most likely 401, refresh token
     }
+    if (quarks_response == NULL) printf("Uh oh quarks response is null\n");
+
+    addQuarksToArray(&joined_quarks, quarks_response);
     free(quarks_response);
 
     curl_GW_handle = curlUpgradeGateway(GATEWAY_URL); //upgrde to gateway (WebSocket)
     if (curl_GW_handle == NULL){
-        //TODO Rewrite curl functions to get the http respone code, so i specifically know if its a 401 or something
         printf("Gateway upgrade failed\n");
         goto refresh_login;
     }
@@ -95,15 +98,17 @@ int LightquarkLogin(){
     char refreshtokenrequest[256];
     sprintf(refreshtokenrequest, "{\"accessToken\": \"%s\", \"refreshToken\": \"%s\"}", accesstoken, refreshtoken);
     
-    char *pleasekillme = curlRequest("https://lightquark.network/v4/auth/refresh", refreshtokenrequest, NULL);
-    printf("pleasekillme_response: %s\n", pleasekillme);
+    char *refresh_response = curlRequest("https://lightquark.network/v4/auth/refresh", refreshtokenrequest, NULL, &httpcodecurl);
+    if (httpcodecurl != 200 || refresh_response == NULL){
+        printf("Failed to refresh tokens\n"); // if code is not ok, aka most likely 401, start blank login
+        goto blank_login;
+    }
 
-    char *ACtoken_refresh = parse_response(pleasekillme, "accessToken");
-    free(pleasekillme);
+    char *ACtoken_refresh = parse_response(refresh_response, "accessToken");
+    free(refresh_response);
     printf("Refreshed AC: %s\n", ACtoken_refresh);
-    //char *ACtoken_refresh = tokenrefresh_response;
     if (ACtoken_refresh == NULL){
-        printf("Failed to refresh ACtoken. Attempting to re-login...\n");
+        printf("Failed to refresh ACtoken. Starting blank re-login...\n");
         goto blank_login;
     }
     printf("Refreshed AC: %s\n", ACtoken_refresh);
@@ -132,7 +137,7 @@ int LightquarkLogin(){
     }
 
     printf("Requesting Tokens...\n");
-    char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", LOGIN_DATA, NULL); //request login
+    char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", LOGIN_DATA, NULL, &httpcodecurl); //request login
 
     printf("Parsing tokens...\n");
     char *ACtoken = parse_response(auth_response, "access_token"); //get token(s)
