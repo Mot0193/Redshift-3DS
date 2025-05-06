@@ -103,102 +103,86 @@ char *curlRequest(const char* url, const char* postdata, const char* token, long
     return chunk.memory; //dont forget to free this dumbass
 }
 
-char *curl_lq_sendmessage(const char* token, const char* channelid, const char* message, const char* replyto, const bool printoutput){
-    char send_url[256];
-    snprintf(send_url, sizeof(send_url), "https://lightquark.network/v4/channel/%s/messages", channelid);
-    printf("Channel ID URL: %s\n", send_url);
-    if (message == NULL){
-        printf("Message is NULL :(\n");
-        return NULL;
-    }
-    printf("Message: %s\n", message);
+long lqSendmessage(const char* token, const char* channelid, const char* message, const char* replyto){
+    char url[256];
+    snprintf(url, sizeof(url), "https://lightquark.network/v4/channel/%s/messages", channelid);
+    printf("Sending LQ Message: %s\n", message);
     
     CURL *curl;
     CURLcode res;
-    char *buffer = (char *)malloc(4096); // Buffer to store the response
-    if (buffer == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        return NULL;
-    }
+    struct response chunk= {.memory = malloc(0), .size = 0};
+
     curl = curl_easy_init();
+    if (!curl) {
+        free(chunk.memory);
+        return -1;
+    }
 
-    if (curl) {
-        // Set the URL
-        curl_easy_setopt(curl, CURLOPT_URL, send_url);
+    curl_easy_setopt(curl, CURLOPT_URL, url);
 
-        struct curl_slist *headers = NULL;
-        headers = curl_slist_append(headers, "Content-Type: multipart/form-data"); //append the Content-Type header
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: multipart/form-data");
 
-        char agent_header[32];
-        snprintf(agent_header, sizeof(agent_header), "lq-agent: %s", CLIENT_NAME);
-        headers = curl_slist_append(headers, agent_header); //append lq-agent
+    char agent_header[32];
+    snprintf(agent_header, sizeof(agent_header), "lq-agent: %s", CLIENT_NAME);
+    headers = curl_slist_append(headers, agent_header);
 
-        char auth_header[512];
-        snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", token); 
-        headers = curl_slist_append(headers, auth_header); //append the Authorization header
+    char auth_header[512];
+    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", token); 
+    headers = curl_slist_append(headers, auth_header);
 
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers); //set headers
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-        // create message payload w/cJSON
-        cJSON *data = cJSON_CreateObject();
-        cJSON_AddStringToObject(data, "content", message);
-        cJSON *specialAttributes = cJSON_CreateArray();
-        if (replyto != NULL){
-            cJSON *replyAttr = cJSON_CreateObject();
-            cJSON_AddStringToObject(replyAttr, "type", "reply");
-            cJSON_AddStringToObject(replyAttr, "replyTo", replyto);
-            cJSON_AddItemToArray(specialAttributes, replyAttr);
-            cJSON_AddItemToObject(data, "specialAttributes", specialAttributes);
-        }
-        char *message_payload = cJSON_PrintUnformatted(data);
-        cJSON_Delete(data);
+    // create message payload
+    cJSON *data = cJSON_CreateObject();
+    cJSON_AddStringToObject(data, "content", message);
+    cJSON *specialAttributes = cJSON_CreateArray();
+    if (replyto != NULL){
+        cJSON *replyAttr = cJSON_CreateObject();
+        cJSON_AddStringToObject(replyAttr, "type", "reply");
+        cJSON_AddStringToObject(replyAttr, "replyTo", replyto);
+        cJSON_AddItemToArray(specialAttributes, replyAttr);
+        cJSON_AddItemToObject(data, "specialAttributes", specialAttributes);
+    }
+    char *message_payload = cJSON_PrintUnformatted(data);
+    cJSON_Delete(data);
 
-        // setup mime
-        curl_mime *mime;
-        curl_mimepart *part;
-        mime = curl_mime_init(curl);
-        part = curl_mime_addpart(mime);
+    // mime/formdata
+    curl_mime *mime;
+    curl_mimepart *part;
+    mime = curl_mime_init(curl);
+    part = curl_mime_addpart(mime);
 
-        // set form
-        curl_mime_name(part, "payload");
-        curl_mime_type(part, "application/json");
-        curl_mime_data(part, message_payload, CURL_ZERO_TERMINATED);
+    curl_mime_name(part, "payload");
+    curl_mime_type(part, "application/json");
+    curl_mime_data(part, message_payload, CURL_ZERO_TERMINATED);
+    curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
 
-        // attach mime post
-        curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L); 
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
 
-        /* Misc settings */
-        //Increase/sets timeout
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
-        // Set the callback function to handle the response data
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)buffer);
-        // Disable SSL certificate verification
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-        // Output verbose
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L); // 1L for on, 0L for nothing
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&chunk);
 
-        // Perform request
-        res = curl_easy_perform(curl);
-
-        if(res != CURLE_OK) {
-            printf("curl_easy_perform Error: %s\n", curl_easy_strerror(res));
-            free(buffer);
-            buffer = NULL;
-            return NULL;
-        }
-        if(printoutput == true){
-            // Print the response
-            printf("Response:\n %s\n", buffer);
-        }
-        free(message_payload);
+    res = curl_easy_perform(curl);
+    if(res != CURLE_OK) {
+        printf("curl perform error when sending lq message: %s\n", curl_easy_strerror(res));
+        free(chunk.memory);
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
-        curl_mime_free(mime);
+        return -1;
     }
-    return buffer;
+    long httpcodeout;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpcodeout);
+
+    free(chunk.memory);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    return httpcodeout;
 }
 
 // --- [Gateway stuff] ---
@@ -490,15 +474,10 @@ char *GW_ReceiveFrame(CURL *curl){
     case 127:
         uint8_t xl_extended_header[8];
         curl_PollRecv(curl, xl_extended_header, sizeof(xl_extended_header));
-        payload_len = 
-                    ((uint64_t)xl_extended_header[0] << 56) | 
-                    ((uint64_t)xl_extended_header[1] << 48) |
-                    ((uint64_t)xl_extended_header[2] << 40) |
-                    ((uint64_t)xl_extended_header[3] << 32) |
-                    ((uint64_t)xl_extended_header[4] << 24) |
-                    ((uint64_t)xl_extended_header[5] << 16) |
-                    ((uint64_t)xl_extended_header[6] << 8)  |
-                    (uint64_t)xl_extended_header[7];
+        payload_len = 0;
+        for (int i = 0; i < 8; i++) {
+            payload_len |= ((uint64_t)xl_extended_header[i]) << (56 - 8 * i);
+        }
         printf("Extra-Extended (actual) payload length: %lld", payload_len);
         break;
     case 126:
@@ -514,14 +493,6 @@ char *GW_ReceiveFrame(CURL *curl){
             return NULL;
         }
     }
-    
-    /*
-    For some reason i thought if the message is bigger than the allocated thread memory, it crashes??? Am i dumb? It doesnt crash.
-    if (payload_len > 16 * 1024){ //the size of allocated stack memory for the thread
-        printf("RECEIVED WEBSOCKET MESSAGE TOO FAT\n");
-        return NULL;
-    }
-    */
     
     char * received_payload = malloc(payload_len+1);
     if (received_payload == NULL) {

@@ -325,19 +325,23 @@ int main() {
 
         if (touchingArea(touch, target1, target2) == true){
             SwkbdState swkbd;
-            char sendingmessage_buffer[512];
+            char sendingmessage_buffer[1024];
             SwkbdButton button = SWKBD_BUTTON_NONE;
 
-            swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 1, -1);
+            swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, -1);
             swkbdSetHintText(&swkbd, "Send message in selected channel");
-            swkbdSetFeatures(&swkbd, SWKBD_PREDICTIVE_INPUT); // trying this out, might be useful
             swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Cancel", false);
+            swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "Send Message", true);
+            swkbdSetFeatures(&swkbd, SWKBD_PREDICTIVE_INPUT);
+            swkbdSetValidation(&swkbd, SWKBD_ANYTHING, 1, sizeof(sendingmessage_buffer));
             button = swkbdInputText(&swkbd, sendingmessage_buffer, sizeof(sendingmessage_buffer)); 
 
             // if button = "ok" and the string is not empty
             if (button == SWKBD_BUTTON_RIGHT && sendingmessage_buffer[0] != '\0'){
-                printf("Sending message:\n%s\n", sendingmessage_buffer);
-                curl_lq_sendmessage(accesstoken, selected_channel_id, sendingmessage_buffer, NULL, true); // todo: use a thread event thingy so the program doesnt freeze
+                long httpcode = lqSendmessage(accesstoken, selected_channel_id, sendingmessage_buffer, NULL); // todo: use a thread event thingy so the program doesnt freeze
+                if (httpcode != 201){
+                    printf("Message sending failed... HTTP code: %li\n", httpcode);
+                } else printf("Sent message: %s\n", sendingmessage_buffer);
             }
         }
 
@@ -389,12 +393,14 @@ int main() {
         
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
+        //*
         C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(top);
 
         LightLock_Lock(&MessageWriterLock);
         DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
         LightLock_Unlock(&MessageWriterLock);
+        //*/
 
         //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
