@@ -31,6 +31,7 @@ size_t selected_channel = 0;
 size_t entered_selected_channel = 0;
     
 LightLock MessageWriterLock;
+LightLock CurlGatewayLock;
 
 FILE *loginfile;
 char accesstoken[89];
@@ -104,7 +105,7 @@ int LightquarkLogin(){
         goto blank_login;
     }
 
-    char *ACtoken_refresh = parse_response(refresh_response, "accessToken");
+    char *ACtoken_refresh = parseResponse(refresh_response, "accessToken");
     free(refresh_response);
     printf("Refreshed AC: %s\n", ACtoken_refresh);
     if (ACtoken_refresh == NULL){
@@ -116,6 +117,7 @@ int LightquarkLogin(){
     loginfile = fopen("/3ds/redshift/logindata.txt", "a");
     fseek(loginfile, 0, SEEK_SET);
     fprintf(loginfile,"%s\n", ACtoken_refresh);
+    free(ACtoken_refresh);
 
     fclose(loginfile);
     goto attempt_login;
@@ -140,8 +142,8 @@ int LightquarkLogin(){
     char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", LOGIN_DATA, NULL, &httpcodecurl); //request login
 
     printf("Parsing tokens...\n");
-    char *ACtoken = parse_response(auth_response, "access_token"); //get token(s)
-    char *REtoken = parse_response(auth_response, "refresh_token");
+    char *ACtoken = parseResponse(auth_response, "access_token"); //get token(s)
+    char *REtoken = parseResponse(auth_response, "refresh_token");
     free(auth_response);
 
     if (ACtoken && REtoken) {
@@ -150,8 +152,10 @@ int LightquarkLogin(){
 
         fprintf(loginfile, "%s\n", ACtoken);
         fprintf(loginfile, "%s\n", REtoken);
-
         printf("Done writing tokens to file.\n");
+
+        free(ACtoken);
+        free(REtoken);
         fclose(loginfile);
         goto attempt_login;
     } else {
@@ -221,10 +225,6 @@ void GW_reader_thread(void *ws_curl_handle)
                         cJSON_AddItemToObject(single_message, "message", cJSON_Duplicate(message, 1));
                         cJSON *channelId = cJSON_CreateString(joined_quarks[selected_quark].channels[i].channel_id);
                         cJSON_AddItemToObject(single_message, "channelId", channelId);
-                        if (!single_message){
-                            printf("Fuck created single_message is NULL");
-                            continue;
-                        }
 
                         LightLock_Lock(&MessageWriterLock);
                         addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, single_message);
@@ -263,8 +263,10 @@ void GW_reader_thread(void *ws_curl_handle)
 void GW_heartbeat_thread(void *ws_curl_handle){
     printf("Heartbeat Thread started!\n");
 	while (runThreads)
-	{
+	{   
+        //LightLock_Lock(&CurlGatewayLock); //idk???
         GW_SendFrame(ws_curl_handle, "{\"event\": \"heartbeat\",\"state\": \"\"}");
+        //LightLock_Unlock(&CurlGatewayLock);
         printf("Sent heartbeat!\n");
         svcSleepThread(50*1000000000ULL); // delay 50 seconds x 1 sec in ns
 	}
@@ -303,7 +305,7 @@ int main() {
     }
 
     Thread thread_GW_reader = threadCreate(GW_reader_thread, curl_GW_handle, 4 * 1024, 0x2E, -2, false); //start the thread that reads incoming gateway messages
-    Thread thread_GW_heartbeat = threadCreate(GW_heartbeat_thread, curl_GW_handle, 1024, 0x2F, -2, false); //start heartbeat thread
+    Thread thread_GW_heartbeat = threadCreate(GW_heartbeat_thread, curl_GW_handle, 2 * 1024, 0x2F, -2, false); //start heartbeat thread
     
     float scroll_offset = 0;
     bool channel_select = false;
@@ -347,13 +349,14 @@ int main() {
 
         if (kDown & KEY_A){
             // get recent messages in selected channel on A press
-            GW_SendFrame(curl_GW_handle, GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, 10));
+            char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, 10);
+            GW_SendFrame(curl_GW_handle, getmessagerequest);
+            free(getmessagerequest);
             
         }
         if (kDown & KEY_B){
         }
         if (kDown & KEY_Y){
-            LightquarkLogin();
         }
 
 
