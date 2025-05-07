@@ -1,6 +1,8 @@
 #ifndef CURLREQUESTS_H
 #define CURLREQUESTS_H
 
+extern LightLock CurlGatewayLock;
+
 #include <stdlib.h>
 #include <string.h>
 #include <curl/curl.h>
@@ -175,9 +177,11 @@ long lqSendmessage(const char* token, const char* channelid, const char* message
         curl_easy_cleanup(curl);
         return -1;
     }
+    
     long httpcodeout;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpcodeout);
 
+    free(message_payload);
     free(chunk.memory);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
@@ -442,7 +446,10 @@ void curl_PollRecv(CURL *curl, void *buffer, size_t buflen){
     
     while (total_received < buflen) {
         // Attempt to receive data
+        LightLock_Lock(&CurlGatewayLock);
         res = curl_easy_recv(curl, (uint8_t *)buffer + total_received, buflen - total_received, &bytes_received);
+        LightLock_Unlock(&CurlGatewayLock);
+
         if (res == CURLE_OK && bytes_received > 0) {
             total_received += bytes_received;  // Accumulate received bytes
         } else if (res == CURLE_AGAIN) {

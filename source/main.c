@@ -264,11 +264,42 @@ void GW_heartbeat_thread(void *ws_curl_handle){
     printf("Heartbeat Thread started!\n");
 	while (runThreads)
 	{   
-        //LightLock_Lock(&CurlGatewayLock); //idk???
+        LightLock_Lock(&CurlGatewayLock); //idk???
         GW_SendFrame(ws_curl_handle, "{\"event\": \"heartbeat\",\"state\": \"\"}");
-        //LightLock_Unlock(&CurlGatewayLock);
+        LightLock_Unlock(&CurlGatewayLock);
         printf("Sent heartbeat!\n");
         svcSleepThread(50*1000000000ULL); // delay 50 seconds x 1 sec in ns
+	}
+}
+
+struct messageSendData {
+    char *accesstoken;
+    char *selectedchannelid;
+    char *sendingmessage_buffer;
+    char *replyto;
+} threadsenddata;
+Handle threadMessageSendRequest;
+void messageSender_thread(void *arg){
+    while(runThreads) {
+		svcWaitSynchronization(threadMessageSendRequest, U64_MAX);
+		svcClearEvent(threadMessageSendRequest);
+
+        long messageSend_httpcode;
+        const char *accesstoken = threadsenddata.accesstoken;
+        const char *channelid = threadsenddata.selectedchannelid;
+        char *message = threadsenddata.sendingmessage_buffer;
+        const char *replyto = threadsenddata.replyto;
+
+        if (message != NULL) {
+            messageSend_httpcode = lqSendmessage(accesstoken, channelid, message, replyto);
+            if (messageSend_httpcode != 201) {
+                printf("Message sending failed... HTTP code: %li\n", messageSend_httpcode);
+            } else {
+                printf("Sent message: %s\n", message);
+            }
+            free(message);
+            threadsenddata.sendingmessage_buffer = NULL;
+        }
 	}
 }
 
@@ -291,6 +322,9 @@ int main() {
 	C2D_Prepare();
 
     LightLock_Init(&MessageWriterLock);
+    LightLock_Init(&CurlGatewayLock);
+
+    
 
     C3D_RenderTarget* top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     C3D_RenderTarget* bot = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
@@ -298,15 +332,16 @@ int main() {
     text_contentBuf  = C2D_TextBufNew(512 * MAX_REND_MESSAGES); // todo figure out dynamic allocation for c2d text buffers
     text_usernameBuf  = C2D_TextBufNew(64 * MAX_REND_MESSAGES); // LQ's max username char count is 64, so 64 x 10*, *MAX_REND_MESSAGES
 
-
     if (LightquarkLogin() != 0){
         usleep(1000 * 1000);
         goto exit_redshift;
     }
 
-    Thread thread_GW_reader = threadCreate(GW_reader_thread, curl_GW_handle, 4 * 1024, 0x2E, -2, false); //start the thread that reads incoming gateway messages
-    Thread thread_GW_heartbeat = threadCreate(GW_heartbeat_thread, curl_GW_handle, 2 * 1024, 0x2F, -2, false); //start heartbeat thread
-    
+    svcCreateEvent(&threadMessageSendRequest,0);
+    Thread thread_GW_reader = threadCreate(GW_reader_thread, curl_GW_handle, 4 * 1024, 0x2F, -2, false); //start the thread that reads incoming gateway messages
+    Thread thread_GW_heartbeat = threadCreate(GW_heartbeat_thread, curl_GW_handle, 2 * 1024, 0x3F, -2, false); //start heartbeat thread
+    Thread thread_messageSender = threadCreate(messageSender_thread, 0, 6 * 1024, 0x18, -2, true); //initialize message sender thread //todo, maybe check for new 3ds and banish this to another core, to hopefully increase performance?
+
     float scroll_offset = 0;
     bool channel_select = false;
 
@@ -340,10 +375,11 @@ int main() {
 
             // if button = "ok" and the string is not empty
             if (button == SWKBD_BUTTON_RIGHT && sendingmessage_buffer[0] != '\0'){
-                long httpcode = lqSendmessage(accesstoken, selected_channel_id, sendingmessage_buffer, NULL); // todo: use a thread event thingy so the program doesnt freeze
-                if (httpcode != 201){
-                    printf("Message sending failed... HTTP code: %li\n", httpcode);
-                } else printf("Sent message: %s\n", sendingmessage_buffer);
+                threadsenddata.accesstoken = accesstoken;
+                threadsenddata.selectedchannelid = selected_channel_id;
+                threadsenddata.sendingmessage_buffer = strdup(sendingmessage_buffer);
+                //threadsenddata.replyto = NULL;
+                svcSignalEvent(threadMessageSendRequest);
             }
         }
 
@@ -421,13 +457,17 @@ int main() {
 
     runThreads = false;
 
-    threadJoin(thread_GW_reader, 1000000000);
+    threadJoin(thread_GW_reader, 1000000000); // 1000000000 Nanoseconds = 1 Second // i mean... do i even need to wait for threads... clearly the timeout will always get reached because my threads take at most 40 seconds to finish
+    
     threadFree(thread_GW_reader);
 
     threadJoin(thread_GW_heartbeat, 1000000000);
     threadFree(thread_GW_heartbeat);
 
+    threadJoin(thread_messageSender, 1000000000);
+
     curl_easy_cleanup(curl_GW_handle);
+    svcCloseHandle(threadMessageSendRequest);
 
     gfxExit();
     return 0;
