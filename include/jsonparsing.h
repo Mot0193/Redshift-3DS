@@ -1,10 +1,5 @@
-#ifndef jsonparsing_H
-#define jsonparsing_H
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <cJSON.h>
+#ifndef JSONPARSING_H
+#define JSONPARSING_H
 
 char *GW_LQAssembleGetMessages(char *usertoken, char *channelid, uint64_t *beforeTimestamp, uint64_t *afterTimestamp, uint16_t limit){ //todo figure out search terms
     if (!usertoken) return NULL;

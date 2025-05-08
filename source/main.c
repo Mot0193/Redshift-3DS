@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <poll.h>
+#include <malloc.h>
 
 #include <unistd.h>
 
@@ -14,9 +16,9 @@
 #include <curl/curl.h>
 #include "cJSON.h"
 
-#include "MessageRendering.h"
-#include "curlrequests.h"
-#include "jsonparsing.h"
+#include "UIdataRendering.h"
+#include "networking.h"
+#include "jsonParsing.h"
 #include "socket3ds.h"
 
 #define GATEWAY_URL "https://gw.ram.lightquark.network"

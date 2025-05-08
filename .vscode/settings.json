@@ -15,6 +15,10 @@
         "messageassemble.h": "c",
         "messagerendering.h": "c",
         "typeinfo": "c",
-        "type_traits": "c"
+        "type_traits": "c",
+        "stdbool.h": "c",
+        "stat.h": "c",
+        "uidatarendering.h": "c",
+        "types.h": "c"
     }
 }

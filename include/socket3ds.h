@@ -1,12 +1,6 @@
 #ifndef SOCKET3DS_H
 #define SOCKET3DS_H
 
-#include <3ds.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <malloc.h>
-
-
 #define SOC_ALIGN 0x1000
 #define SOC_BUFFERSIZE (4 * 1024 * 1024)
 static u32 *SOC_buffer = NULL;
