@@ -22,7 +22,6 @@
 #define GATEWAY_URL "https://gw.ram.lightquark.network"
 #define LOGIN_DATA "{\"email\": \"testuser@litdevs.org\",\"password\": \"wordpass\"}"
 
-//struct MessageStructure recent_messages[MAX_REND_MESSAGES] = {0}; // array for storing message structs
 struct Quark *joined_quarks = NULL; // dynamic array for storing joined quarks (and channels)
 char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, used to filter websocket messages and stuff
 
@@ -178,7 +177,7 @@ void GW_reader_thread(void *ws_curl_handle)
         char * received_payload = GW_ReceiveFrame(ws_curl_handle);
         if (!received_payload) continue;
 
-        cJSON *json_response = GW_EventReader(received_payload, &eventnumber);
+        cJSON *json_response = GW_EventSorter(received_payload, &eventnumber);
         free(received_payload);
 
         if (!json_response) continue;
@@ -188,52 +187,51 @@ void GW_reader_thread(void *ws_curl_handle)
         case 0: //rpc --- --- ---
             //printf(cJSON_PrintUnformatted(json_response));
             cJSON *state = cJSON_GetObjectItem(json_response, "state");
-
             char *state_token;
             state_token = strtok(state->valuestring, ".");
 
             
-            if (strcmp(state_token, "GetMessages") != 0){
-                printf("Unknown State String for RPC message\n");
-                goto rpc_abort;
-            }
-            state_token = strtok(NULL, ".");
-            printf("State Thing Id: %s\n", state_token);
+            if (strcmp(state_token, "GetMessages") == 0){
+                state_token = strtok(NULL, ".");
+                printf("State Thing Id: %s\n", state_token);
 
-            cJSON *body = cJSON_GetObjectItem(json_response, "body");
-            cJSON *response = cJSON_GetObjectItem(body, "response");
-            cJSON *messages = cJSON_GetObjectItem(response, "messages");
-            int messages_arraysize = cJSON_GetArraySize(messages);
-            if (!messages || !cJSON_IsArray(messages) || messages_arraysize == 0) {
-                printf("RPC Messages array doesn't exist or it's empty wtf\n");
-                goto rpc_abort;
-            }
-
-            for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++) {
-
-                if (strcmp(state_token, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
-
-                    for (int j = messages_arraysize-1; j >= 0; j--){
-                        // is this too overcomplicated i dont know. I feel like i could have a seperate addmessages function instead of trying to use the same function by making a compatible json obect
-                        cJSON *message = cJSON_GetArrayItem(messages, j);
-                        if (!message) {
-                            printf("Message at index %d is NULL!\n", j);
-                            continue;
-                        }
-
-                        cJSON *single_message = cJSON_CreateObject();
-                        cJSON_AddItemToObject(single_message, "message", cJSON_Duplicate(message, 1));
-                        cJSON *channelId = cJSON_CreateString(joined_quarks[selected_quark].channels[i].channel_id);
-                        cJSON_AddItemToObject(single_message, "channelId", channelId);
-
-                        LightLock_Lock(&MessageWriterLock);
-                        addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, single_message);
-                        LightLock_Unlock(&MessageWriterLock);
-
-                        cJSON_Delete(single_message);
-                    }
-                    break;
+                cJSON *body = cJSON_GetObjectItem(json_response, "body");
+                cJSON *response = cJSON_GetObjectItem(body, "response");
+                cJSON *messages = cJSON_GetObjectItem(response, "messages");
+                int messages_arraysize = cJSON_GetArraySize(messages);
+                if (!messages || !cJSON_IsArray(messages) || messages_arraysize == 0) {
+                    printf("RPC Messages array doesn't exist or it's empty wtf\n");
+                    goto rpc_abort;
                 }
+
+                for (int i = 0; i < joined_quarks[selected_quark].channels_count; i++) {
+
+                    if (strcmp(state_token, joined_quarks[selected_quark].channels[i].channel_id) == 0) {
+
+                        for (int j = messages_arraysize-1; j >= 0; j--){
+                            // is this too overcomplicated i dont know. I feel like i could have a seperate addmessages function instead of trying to use the same function by making a compatible json obect
+                            cJSON *message = cJSON_GetArrayItem(messages, j);
+                            if (!message) {
+                                printf("Message at index %d is NULL!\n", j);
+                                continue;
+                            }
+
+                            cJSON *single_message = cJSON_CreateObject();
+                            cJSON_AddItemToObject(single_message, "message", cJSON_Duplicate(message, 1));
+                            cJSON *channelId = cJSON_CreateString(joined_quarks[selected_quark].channels[i].channel_id);
+                            cJSON_AddItemToObject(single_message, "channelId", channelId);
+
+                            LightLock_Lock(&MessageWriterLock);
+                            addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, single_message);
+                            LightLock_Unlock(&MessageWriterLock);
+
+                            cJSON_Delete(single_message);
+                        }
+                        break;
+                    }
+                }
+            } else {
+                printf("Unknown State String for RPC message\n");
             }
 
             rpc_abort:
@@ -458,13 +456,13 @@ int main() {
     runThreads = false;
 
     threadJoin(thread_GW_reader, 1000000000); // 1000000000 Nanoseconds = 1 Second // i mean... do i even need to wait for threads... clearly the timeout will always get reached because my threads take at most 40 seconds to finish
-    
     threadFree(thread_GW_reader);
 
     threadJoin(thread_GW_heartbeat, 1000000000);
     threadFree(thread_GW_heartbeat);
 
     threadJoin(thread_messageSender, 1000000000);
+    threadFree(thread_messageSender);
 
     curl_easy_cleanup(curl_GW_handle);
     svcCloseHandle(threadMessageSendRequest);

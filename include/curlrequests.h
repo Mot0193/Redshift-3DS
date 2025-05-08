@@ -41,12 +41,6 @@ static size_t write_callback(void *contents, size_t size, size_t nmemb, void *us
   return realsize;
 }
 
-/*size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
-    size_t total_size = size * nmemb;
-    strncat((char *)userdata, (char *)ptr, total_size);
-    return total_size;
-}*/
-
 char *curlRequest(const char* url, const char* postdata, const char* token, long* httpcodeout) {
     //printf("curl_request URL: %s\n", url);
     CURL *curl;

@@ -44,7 +44,7 @@ char *GW_LQAssembleGetMessages(char *usertoken, char *channelid, uint64_t *befor
     return assembled; //YOU MORON YOU NEED TO FREE THIS :OTL:
 } 
 
-cJSON *GW_EventReader(const char *json_response, uint16_t *eventnumber){
+cJSON *GW_EventSorter(const char *json_response, uint16_t *eventnumber){
     cJSON *json = cJSON_Parse(json_response);
 
     cJSON *event = cJSON_GetObjectItemCaseSensitive(json, "event");
