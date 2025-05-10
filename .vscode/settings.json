@@ -19,6 +19,7 @@
         "stdbool.h": "c",
         "stat.h": "c",
         "uidatarendering.h": "c",
-        "types.h": "c"
+        "types.h": "c",
+        "cstdlib": "c"
     }
 }
