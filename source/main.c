@@ -22,7 +22,6 @@
 #include "socket3ds.h"
 
 #define GATEWAY_URL "https://gw.ram.lightquark.network"
-#define LOGIN_DATA "{\"email\": \"testuser@litdevs.org\",\"password\": \"wordpass\"}"
 
 struct Quark *joined_quarks = NULL; // dynamic array for storing joined quarks (and channels)
 char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, used to filter websocket messages and stuff
@@ -48,7 +47,6 @@ typedef enum {
 
 LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
     printf("LoginState: %d\n", loginState);
-    //int login_retry = 0;
     long httpcodecurl = 0;
 
     if (mkdir("/3ds/redshift", 0775) == -1){
@@ -75,6 +73,7 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
         char *quarks_response = curlRequest("https://lightquark.network/v4/quark", NULL, accesstoken, &httpcodecurl); //get quarks
         printf("Quark Response HTTP code: %li\n", httpcodecurl);
         if (httpcodecurl != 200){
+            fclose(loginfile);
             return LOGIN_STATE_REFRESH; // if code is not ok, aka most likely 401, refresh token
         }
         if (quarks_response == NULL) printf("Uh oh quarks response is null\n");
@@ -85,6 +84,7 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
         curl_GW_handle = curlUpgradeGateway(GATEWAY_URL); //upgrde to gateway (WebSocket)
         if (curl_GW_handle == NULL){
             printf("Gateway upgrade failed\n");
+            fclose(loginfile);
             return LOGIN_STATE_REFRESH;
         }
         char gw_auth[256];
@@ -96,9 +96,17 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
 
     case LOGIN_STATE_REFRESH:
         printf("Refreshing Token...\n");
+        loginfile = fopen("/3ds/redshift/logindata.txt", "r");
+        if (loginfile == NULL) {
+            printf("Failed to open login file\n");
+            return LOGIN_STATE_BLANK;
+        }
 
-        fgets(refreshtoken, sizeof(refreshtoken), loginfile);
-        fgets(refreshtoken, sizeof(refreshtoken), loginfile);
+        fgets(accesstoken, 128, loginfile);
+        accesstoken[strcspn(accesstoken, "\n")] = '\0';
+        printf("Access Token saved from file: %s\n", accesstoken);
+        
+        fgets(refreshtoken, 128, loginfile);
         refreshtoken[strcspn(refreshtoken, "\n")] = '\0';
         printf("Refresh Token saved from file: %s\n", refreshtoken);
         fclose(loginfile);
@@ -119,11 +127,14 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
             printf("Failed to refresh ACtoken. Starting blank re-login...\n");
             return LOGIN_STATE_BLANK;
         }
-        printf("Refreshed AC: %s\n", ACtoken_refresh);
-
-        loginfile = fopen("/3ds/redshift/logindata.txt", "a");
+        
+        loginfile = fopen("/3ds/redshift/logindata.txt", "r+");
+        if (loginfile == NULL) {
+            printf("Failed to open login file\n");
+            return LOGIN_STATE_BLANK;
+        }
         fseek(loginfile, 0, SEEK_SET);
-        fprintf(loginfile,"%s\n", ACtoken_refresh);
+        fprintf(loginfile, "%s\n%s\n", ACtoken_refresh, refreshtoken); //writes both new ac and re tokens...
         free(ACtoken_refresh);
 
         fclose(loginfile);
@@ -140,9 +151,14 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
 
         char logindata[288];
         snprintf(logindata, sizeof(logindata), "{\"email\": \"%s\",\"password\": \"%s\"}", email, password);
-        printf("LoginData: %s\n", logindata);
         printf("Requesting Tokens...\n");
         char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", logindata, NULL, &httpcodecurl); //request login
+        printf("HTTP code for request tokens: %li\n", httpcodecurl);
+        if (httpcodecurl != 200 || auth_response == NULL){
+            printf("Failed to request tokens/login with password\n");
+            fclose(loginfile);
+            return LOGIN_STATE_FAILED;
+        }
 
         printf("Parsing tokens...\n");
         char *ACtoken = parseResponse(auth_response, "access_token"); //get token(s)
@@ -159,7 +175,6 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
 
             free(ACtoken);
             free(REtoken);
-            printf("Closing file\n");
             fclose(loginfile);
             return LOGIN_STATE_ATTEMPT;
         } else {
@@ -284,6 +299,7 @@ struct messageSendData {
     char *replyto;
 } threadsenddata;
 Handle threadMessageSendRequest;
+
 void messageSender_thread(void *arg){
     while(runThreads) {
 		svcWaitSynchronization(threadMessageSendRequest, U64_MAX);
@@ -336,9 +352,9 @@ int main() {
     text_contentBuf  = C2D_TextBufNew(512 * MAX_REND_MESSAGES); // todo figure out dynamic allocation for c2d text buffers
     text_usernameBuf  = C2D_TextBufNew(64 * MAX_REND_MESSAGES); // LQ's max username char count is 64, so 64 x 10*, *MAX_REND_MESSAGES
 
-    Thread thread_GW_reader;
-    Thread thread_GW_heartbeat;
-    Thread thread_messageSender;
+    Thread thread_GW_reader = NULL;
+    Thread thread_GW_heartbeat = NULL;
+    Thread thread_messageSender = NULL;
 
     float scroll_offset = 0;
     bool channel_select = false;
@@ -451,9 +467,9 @@ int main() {
         if (!runThreads){
             runThreads = true;
             svcCreateEvent(&threadMessageSendRequest,0);
-            Thread thread_GW_reader = threadCreate(GW_reader_thread, curl_GW_handle, 4 * 1024, 0x2F, -2, false); //start the thread that reads incoming gateway messages
-            Thread thread_GW_heartbeat = threadCreate(GW_heartbeat_thread, curl_GW_handle, 2 * 1024, 0x3F, -2, false); //start heartbeat thread
-            Thread thread_messageSender = threadCreate(messageSender_thread, 0, 6 * 1024, 0x18, -2, true); //initialize message sender thread //todo, maybe check for new 3ds and banish this to another core, to hopefully increase performance?
+            thread_GW_reader = threadCreate(GW_reader_thread, curl_GW_handle, 4 * 1024, 0x2F, -2, false); //start the thread that reads incoming gateway messages
+            thread_GW_heartbeat = threadCreate(GW_heartbeat_thread, curl_GW_handle, 2 * 1024, 0x3F, -2, false); //start heartbeat thread
+            thread_messageSender = threadCreate(messageSender_thread, 0, 6 * 1024, 0x18, -2, true); //initialize message sender thread //todo, maybe check for new 3ds and banish this to another core, to hopefully increase performance?
         }
 
 
@@ -545,10 +561,11 @@ int main() {
 
         //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
+        //*
         C2D_TargetClear(botScreen, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(botScreen);
         DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
-        
+        //*/
         C3D_FrameEnd(0);
     }
     exit_redshift:
@@ -560,13 +577,13 @@ int main() {
     runThreads = false;
 
     threadJoin(thread_GW_reader, 1000000000); // 1000000000 Nanoseconds = 1 Second // i mean... do i even need to wait for threads... clearly the timeout will always get reached because my threads take at most 40 seconds to finish
-    threadFree(thread_GW_reader);
+    if (thread_GW_reader) threadFree(thread_GW_reader);
 
     threadJoin(thread_GW_heartbeat, 1000000000);
-    threadFree(thread_GW_heartbeat);
+    if (thread_GW_heartbeat) threadFree(thread_GW_heartbeat);
 
     threadJoin(thread_messageSender, 1000000000);
-    threadFree(thread_messageSender);
+    if (thread_messageSender) threadFree(thread_messageSender);
 
     curl_easy_cleanup(curl_GW_handle);
     svcCloseHandle(threadMessageSendRequest);

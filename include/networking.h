@@ -32,6 +32,7 @@ static size_t write_callback(void *contents, size_t size, size_t nmemb, void *us
 
 char *curlRequest(const char* url, const char* postdata, const char* token, long* httpcodeout) {
     //printf("curl_request URL: %s\n", url);
+    //printf("curlRequest send message: %s\n", postdata);
     CURL *curl;
     CURLcode res;
     struct response chunk= {.memory = malloc(0), .size = 0};
@@ -359,7 +360,7 @@ void GW_SendLargeFrame(CURL *curl, const char *message){
 }
 
 void GW_SendFrame(CURL *curl, const char *message) {
-    printf("Sending message: %s\n", message);
+    //printf("Sending message: %s\n", message);
     size_t msg_len = strlen(message);
     if ((msg_len > 125) && (msg_len <= 65535)){
         printf("Sending Extended Length message\n");
