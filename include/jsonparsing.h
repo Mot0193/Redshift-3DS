@@ -11,8 +11,8 @@ char *GW_LQAssembleGetMessages(char *usertoken, char *channelid, uint64_t *befor
     if (beforeTimestamp) snprintf(messageurl + strlen(messageurl), urlsize - strlen(messageurl), "&beforeTimestamp=%llu", *beforeTimestamp);
     if (afterTimestamp) snprintf(messageurl + strlen(messageurl), urlsize - strlen(messageurl), "&afterTimestamp=%llu", *afterTimestamp);
 
-    char statestring[64];
-    snprintf(statestring, sizeof(statestring), "GetMessages.%s", channelid);
+    char statestring[32 + strlen(channelid)];
+    snprintf(statestring, sizeof(statestring), "GetMessages_%s", channelid);
     cJSON *rpcmessage = cJSON_CreateObject();
     cJSON *event = cJSON_CreateString("rpc");
     cJSON_AddItemToObject(rpcmessage, "event", event);

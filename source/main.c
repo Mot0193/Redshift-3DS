@@ -21,7 +21,7 @@
 #include "jsonParsing.h"
 #include "socket3ds.h"
 
-#define GATEWAY_URL "https://gw.ram.lightquark.network"
+#define GATEWAY_URL "https://gateway.dev.lightquark.network"
 
 struct Quark *joined_quarks = NULL; // dynamic array for storing joined quarks (and channels)
 char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, used to filter websocket messages and stuff
@@ -70,7 +70,7 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
         accesstoken[strcspn(accesstoken, "\n")] = '\0';
         printf("Access Token saved from file: %s\n", accesstoken);
 
-        char *quarks_response = curlRequest("https://lightquark.network/v4/quark", NULL, accesstoken, &httpcodecurl); //get quarks
+        char *quarks_response = curlRequest("https://dev.lightquark.network/v4/quark", NULL, accesstoken, &httpcodecurl); //get quarks
         printf("Quark Response HTTP code: %li\n", httpcodecurl);
         if (httpcodecurl != 200){
             fclose(loginfile);
@@ -114,7 +114,7 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
         char refreshtokenrequest[256];
         sprintf(refreshtokenrequest, "{\"accessToken\": \"%s\", \"refreshToken\": \"%s\"}", accesstoken, refreshtoken);
     
-        char *refresh_response = curlRequest("https://lightquark.network/v4/auth/refresh", refreshtokenrequest, NULL, &httpcodecurl);
+        char *refresh_response = curlRequest("https://dev.lightquark.network/v4/auth/refresh", refreshtokenrequest, NULL, &httpcodecurl);
         if (httpcodecurl != 200 || refresh_response == NULL){
             printf("Failed to refresh tokens\n"); // if code is not ok, aka most likely 401, start blank login
             return LOGIN_STATE_BLANK;
@@ -152,7 +152,7 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
         char logindata[288];
         snprintf(logindata, sizeof(logindata), "{\"email\": \"%s\",\"password\": \"%s\"}", email, password);
         printf("Requesting Tokens...\n");
-        char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", logindata, NULL, &httpcodecurl); //request login
+        char *auth_response = curlRequest("https://dev.lightquark.network/v4/auth/token", logindata, NULL, &httpcodecurl); //request login
         printf("HTTP code for request tokens: %li\n", httpcodecurl);
         if (httpcodecurl != 200 || auth_response == NULL){
             printf("Failed to request tokens/login with password\n");
@@ -210,11 +210,11 @@ void GW_reader_thread(void *ws_curl_handle)
             //printf(cJSON_PrintUnformatted(json_response));
             cJSON *state = cJSON_GetObjectItem(json_response, "state");
             char *state_token;
-            state_token = strtok(state->valuestring, ".");
+            state_token = strtok(state->valuestring, "_");
 
             
             if (strcmp(state_token, "GetMessages") == 0){
-                state_token = strtok(NULL, ".");
+                state_token = strtok(NULL, "_");
                 printf("State Thing Id: %s\n", state_token);
 
                 cJSON *body = cJSON_GetObjectItem(json_response, "body");
@@ -332,7 +332,7 @@ bool touchingArea(touchPosition touch, touchPosition target1, touchPosition targ
 
 int main() {
     gfxInitDefault();
-    //consoleInit(GFX_BOTTOM, NULL);
+    consoleInit(GFX_BOTTOM, NULL);
     printf("Console Initialized!\n");
 
     initSocketService();
@@ -559,9 +559,9 @@ int main() {
         LightLock_Unlock(&MessageWriterLock);
         //*/
 
-        //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
-        //*
+        /*
         C2D_TargetClear(botScreen, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(botScreen);
         DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);

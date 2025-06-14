@@ -14,7 +14,7 @@ C2D_TextBuf text_contentBuf, text_usernameBuf;
 C2D_Text contentText, usernameText;
 
 #define MAX_CHAR_PER_MESSAGE_LINE 60
-#define LQ_IDLENGTH 25 // 24 + 1 for null terminator.. i think. I think im right since with 24 something falls over
+#define LQ_IDLENGTH 128 // 24 + 1 for null terminator.. i think. I think im right since with 24 something falls over
 
 #define MAX_REND_MESSAGES 10 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
 
@@ -537,6 +537,52 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 }
 
 // --- --- [ RENDERING ] --- ---
+
+/*
+C2D_TextBuf buftxt_messageContent[MAX_REND_MESSAGES], buftxt_messageUsername[MAX_REND_MESSAGES];
+C2D_Text txt_messageContent[MAX_REND_MESSAGES], txt_messageUsername[MAX_REND_MESSAGES];
+
+void ParseTextMessages(struct Channel *channel_struct){
+    // This should in theory only run once, when the message structure updates (e.g getting messages in a channel, getting a new message, message gets edited). 
+    // Treating the messages as dynamic text and parsing each frame like the previous rendering function did sounds rather inneficient, so i plan on splitting the parsing and rendering functions.
+    if (!channel_struct) return;
+
+
+    //Im taking the opportunity to also split each message and username in its own text buffer and C2D object
+    for (int i = 0; i < MAX_REND_MESSAGES; i++){
+        buftxt_messageContent[i] = C2D_TextBufNew(256); //TODO: This is the meximum glyphs per message when its rendered in a message list. I want to cut long messages so everything would be cleaner, and to be able to skip scrolling through walls of text basically. Im thinking about being able to select a message to fully read it, in case it longer than this character limit.
+    }
+
+    for (int i = 0; i < MAX_REND_MESSAGES; i++){
+        buftxt_messageUsername[i] = C2D_TextBufNew(64);
+    }
+
+    int start_index = (channel_struct->message_index - channel_struct->total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
+    for (int i = 0; i < MAX_REND_MESSAGES; i++){
+        int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
+
+        if (channel_struct->messages[message_arr_index].content != NULL) {
+            char username = channel_struct->messages[message_arr_index].username; // sets the default name to author username
+
+            for (int j = 0; j < channel_struct->messages[message_arr_index].specialAttribute_count; j++) {
+                if (channel_struct->messages[message_arr_index].specialAttributes[j].type && strcmp(channel_struct->messages[message_arr_index].specialAttributes[j].type, "botMessage") == 0 && channel_struct->messages[message_arr_index].specialAttributes[j].username) {
+                    //ifthetypeisbotMessageandifitexists..
+                    username = channel_struct->messages[message_arr_index].specialAttributes[j].username;
+                    break; // use the botMessage username instead
+                }
+            }
+
+            // Parse Usernames
+            C2D_TextParse(&txt_messageUsername[i], buftxt_messageUsername[i], username);
+            C2D_TextOptimize(&txt_messageUsername[i]);
+
+            // Parse Contents
+            C2D_TextParse(&txt_messageContent[i], buftxt_messageContent[i], channel_struct->messages[message_arr_index].content);
+            C2D_TextOptimize(&txt_messageContent[i]);
+        }
+    }
+}
+*/
 
 void DrawStructuredMessage(struct Channel *channel_struct, int array_size, float scrolling_offset) {
     if (!channel_struct) return;
