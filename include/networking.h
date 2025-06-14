@@ -91,7 +91,7 @@ char *curlRequest(const char* url, const char* postdata, const char* token, long
 
 long lqSendmessage(const char* token, const char* channelid, const char* message, const char* replyto){
     char url[256];
-    snprintf(url, sizeof(url), "https://dev.lightquark.network/v4/channel/%s/messages", channelid);
+    snprintf(url, sizeof(url), "https://lightquark.network/v4/channel/%s/messages", channelid);
     printf("Sending LQ Message: %s\n", message);
     
     CURL *curl;

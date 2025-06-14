@@ -21,7 +21,7 @@
 #include "jsonParsing.h"
 #include "socket3ds.h"
 
-#define GATEWAY_URL "https://gateway.dev.lightquark.network"
+#define GATEWAY_URL "https://gw.ram.lightquark.network"
 
 struct Quark *joined_quarks = NULL; // dynamic array for storing joined quarks (and channels)
 char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, used to filter websocket messages and stuff
@@ -70,7 +70,7 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
         accesstoken[strcspn(accesstoken, "\n")] = '\0';
         printf("Access Token saved from file: %s\n", accesstoken);
 
-        char *quarks_response = curlRequest("https://dev.lightquark.network/v4/quark", NULL, accesstoken, &httpcodecurl); //get quarks
+        char *quarks_response = curlRequest("https://lightquark.network/v4/quark", NULL, accesstoken, &httpcodecurl); //get quarks
         printf("Quark Response HTTP code: %li\n", httpcodecurl);
         if (httpcodecurl != 200){
             fclose(loginfile);
@@ -114,7 +114,7 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
         char refreshtokenrequest[256];
         sprintf(refreshtokenrequest, "{\"accessToken\": \"%s\", \"refreshToken\": \"%s\"}", accesstoken, refreshtoken);
     
-        char *refresh_response = curlRequest("https://dev.lightquark.network/v4/auth/refresh", refreshtokenrequest, NULL, &httpcodecurl);
+        char *refresh_response = curlRequest("https://lightquark.network/v4/auth/refresh", refreshtokenrequest, NULL, &httpcodecurl);
         if (httpcodecurl != 200 || refresh_response == NULL){
             printf("Failed to refresh tokens\n"); // if code is not ok, aka most likely 401, start blank login
             return LOGIN_STATE_BLANK;
@@ -152,7 +152,7 @@ LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
         char logindata[288];
         snprintf(logindata, sizeof(logindata), "{\"email\": \"%s\",\"password\": \"%s\"}", email, password);
         printf("Requesting Tokens...\n");
-        char *auth_response = curlRequest("https://dev.lightquark.network/v4/auth/token", logindata, NULL, &httpcodecurl); //request login
+        char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", logindata, NULL, &httpcodecurl); //request login
         printf("HTTP code for request tokens: %li\n", httpcodecurl);
         if (httpcodecurl != 200 || auth_response == NULL){
             printf("Failed to request tokens/login with password\n");

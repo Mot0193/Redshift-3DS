@@ -20,6 +20,7 @@
         "stat.h": "c",
         "uidatarendering.h": "c",
         "types.h": "c",
-        "cstdlib": "c"
+        "cstdlib": "c",
+        "networking.h": "c"
     }
 }
