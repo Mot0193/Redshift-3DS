@@ -213,7 +213,7 @@ void GW_reader_thread(void *ws_curl_handle)
             state_token = strtok(state->valuestring, "_");
 
             
-            if (strcmp(state_token, "GetMessages") == 0){
+            if (strcmp(state_token, "GetMessages") == 0){ // --- GetMessages ---
                 state_token = strtok(NULL, "_");
                 printf("State Thing Id: %s\n", state_token);
 
@@ -375,7 +375,7 @@ int main() {
             printf("Manual Blank Login requested\n");
             loginState = LOGIN_STATE_BLANK;
         }
-        while (loginState != LOGIN_STATE_DONE){
+        while (loginState != LOGIN_STATE_DONE){ // --- LOGIN SCREEN --- 
             switch (loginState)
             {
             case LOGIN_STATE_BLANK:
@@ -385,7 +385,7 @@ int main() {
                 C2D_TextBuf bufEmail = C2D_TextBufNew(sizeof(loginEmail));
                 C2D_TextBuf bufPassword = C2D_TextBufNew(sizeof(loginPassword)+1);
 
-                const char buttons[] = " Input Email\n  Input Password\n  Hold to reveal Password and Email\n  Login";
+                const char buttons[] = " Input Email\n  Input Password\n  Hold to reveal Password and Email\n  Login\n START Exit";
                 C2D_TextBuf bufLoginButtons = C2D_TextBufNew(sizeof(buttons));
                 C2D_Text txtLoginButtons;
 
@@ -464,6 +464,7 @@ int main() {
                 break;
             }
         }
+        
         if (!runThreads){
             runThreads = true;
             svcCreateEvent(&threadMessageSendRequest,0);
@@ -472,13 +473,12 @@ int main() {
             thread_messageSender = threadCreate(messageSender_thread, 0, 6 * 1024, 0x18, -2, true); //initialize message sender thread //todo, maybe check for new 3ds and banish this to another core, to hopefully increase performance?
         }
 
-
-
         if (kDown & KEY_START) break; // Exit on START button
 
         touchPosition touch;
         hidTouchRead(&touch);
 
+        //its way too overcomplicated to use structures for the touch positions, idk what i was thinking
         if (touchingArea(touch, target1, target2) == true){
             SwkbdState swkbd;
             char sendingmessage_buffer[1024];
@@ -510,8 +510,12 @@ int main() {
             
         }
         if (kDown & KEY_B){
+            DrawTextMessages();
         }
         if (kDown & KEY_Y){
+            LightLock_Lock(&MessageWriterLock);
+            ParseTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel]);
+            LightLock_Unlock(&MessageWriterLock);
         }
 
         if (abs(CPadPos.dy) >= 15){
@@ -554,9 +558,9 @@ int main() {
         C2D_TargetClear(topScreen, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(topScreen);
 
-        LightLock_Lock(&MessageWriterLock);
-        DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
-        LightLock_Unlock(&MessageWriterLock);
+        //LightLock_Lock(&MessageWriterLock);
+        //DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
+        //LightLock_Unlock(&MessageWriterLock);
         //*/
 
         DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);

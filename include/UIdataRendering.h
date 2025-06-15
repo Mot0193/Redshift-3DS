@@ -18,7 +18,9 @@ C2D_Text contentText, usernameText;
 
 #define MAX_REND_MESSAGES 10 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
 
-#define MAX_CHANNEL_QUARK 6 // the max channels or quarks that should get displayed on a *page*
+#define MAX_CHANNEL_QUARK 8 // the max channels or quarks that should get displayed on a *page*
+
+#define MESSAGE_USERNAME_TEXT_SIZE 0.5f
 
 #define QUARK_CHANNEL_TEXT_SIZE 0.5f
 
@@ -538,51 +540,76 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 
 // --- --- [ RENDERING ] --- ---
 
-/*
+//*
 C2D_TextBuf buftxt_messageContent[MAX_REND_MESSAGES], buftxt_messageUsername[MAX_REND_MESSAGES];
 C2D_Text txt_messageContent[MAX_REND_MESSAGES], txt_messageUsername[MAX_REND_MESSAGES];
 
 void ParseTextMessages(struct Channel *channel_struct){
-    // This should in theory only run once, when the message structure updates (e.g getting messages in a channel, getting a new message, message gets edited). 
-    // Treating the messages as dynamic text and parsing each frame like the previous rendering function did sounds rather inneficient, so i plan on splitting the parsing and rendering functions.
+    // This should in theory only run once, when the message structure updates (e.g getting messages in a channel, getting a new message, message gets edited).
+    // Treating the messages as dynamic text and parsing on each frame like the previous rendering function did sounds rather inneficient, so i plan on splitting the parsing and rendering functions.
     if (!channel_struct) return;
 
 
     //Im taking the opportunity to also split each message and username in its own text buffer and C2D object
-    for (int i = 0; i < MAX_REND_MESSAGES; i++){
-        buftxt_messageContent[i] = C2D_TextBufNew(256); //TODO: This is the meximum glyphs per message when its rendered in a message list. I want to cut long messages so everything would be cleaner, and to be able to skip scrolling through walls of text basically. Im thinking about being able to select a message to fully read it, in case it longer than this character limit.
+    //Only create buffers if they DONT exist. We assume that if the 0th buffer exists, all of them have been created (which should obviously be true)
+    if (!buftxt_messageContent[0] || !buftxt_messageUsername[0]){
+        for (int i = 0; i < MAX_REND_MESSAGES; i++){
+            printf("Creating C2D Buffers\n");
+            buftxt_messageContent[i] = C2D_TextBufNew(256); //TODO: This is the maximum glyphs per message when its rendered in a message list. I want to cut long messages so everything would be cleaner, and to be able to skip scrolling through walls of text basically. Im thinking about being able to select a message to fully read it, in case it longer than this character limit. 
+            //NVM for now lets not do this
+            //Im setting the buffers to some low arbritary value because below they will get resized to (almost) perfectly fit the usernames/messages
+            buftxt_messageUsername[i] = C2D_TextBufNew(64);
+        }
     }
-
-    for (int i = 0; i < MAX_REND_MESSAGES; i++){
-        buftxt_messageUsername[i] = C2D_TextBufNew(64);
-    }
+    
 
     int start_index = (channel_struct->message_index - channel_struct->total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
     for (int i = 0; i < MAX_REND_MESSAGES; i++){
         int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
 
         if (channel_struct->messages[message_arr_index].content != NULL) {
-            char username = channel_struct->messages[message_arr_index].username; // sets the default name to author username
+            char *username = channel_struct->messages[message_arr_index].username; // sets the default name to author username
 
             for (int j = 0; j < channel_struct->messages[message_arr_index].specialAttribute_count; j++) {
                 if (channel_struct->messages[message_arr_index].specialAttributes[j].type && strcmp(channel_struct->messages[message_arr_index].specialAttributes[j].type, "botMessage") == 0 && channel_struct->messages[message_arr_index].specialAttributes[j].username) {
-                    //ifthetypeisbotMessageandifitexists..
+                    //ifthetypeisbotMessageandifBotUsernameexists..
                     username = channel_struct->messages[message_arr_index].specialAttributes[j].username;
                     break; // use the botMessage username instead
                 }
             }
 
+            printf("Parsing for buffer %i\n", i);
+            /*/
+            printf("Usr ptr: %p | Cont ptr: %p\n", username, channel_struct->messages[message_arr_index].content);
+            printf("Usr len: %u | Con len: %u\n", strlen(username), strlen(channel_struct->messages[message_arr_index].content));
+            printf("Username value: %s\n", username);
+            printf("Content value: %s\n", channel_struct->messages[message_arr_index].content);
+            usleep(600 * 1000);
+            //*/
+
+            C2D_TextBufClear(buftxt_messageUsername[i]);
+            //C2D_TextBufResize(buftxt_messageUsername[i], strlen(username)); //resize the buffer to be able to hold the exact length of the username
+            //TODO: consider skipping resizing if the buffer is already big enough. Though im not sure if thats worth doing
             // Parse Usernames
             C2D_TextParse(&txt_messageUsername[i], buftxt_messageUsername[i], username);
             C2D_TextOptimize(&txt_messageUsername[i]);
-
+            
+            C2D_TextBufClear(buftxt_messageContent[i]);
+            //C2D_TextBufResize(buftxt_messageContent[i], strlen(channel_struct->messages[message_arr_index].content)); // resize buffer. I know that for C2D spaces dont count as "glyphs", but i using strlen should be close enough, even though i technically dont need to account for spaces. Realistically the buffer will be slightly bigger than needed if the message contains spaces
+            
             // Parse Contents
-            C2D_TextParse(&txt_messageContent[i], buftxt_messageContent[i], channel_struct->messages[message_arr_index].content);
+            C2D_TextParse(&txt_messageContent[i], buftxt_messageContent[i], channel_struct->messages[message_arr_index].content); 
             C2D_TextOptimize(&txt_messageContent[i]);
         }
     }
 }
-*/
+//*/
+
+void DrawTextMessages(){
+    float textHeight;
+    C2D_TextGetDimensions(&txt_messageContent[9], MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, NULL, &textHeight);
+    printf("Message Height: %f\n", textHeight);
+}
 
 void DrawStructuredMessage(struct Channel *channel_struct, int array_size, float scrolling_offset) {
     if (!channel_struct) return;
