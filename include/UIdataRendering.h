@@ -545,7 +545,6 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 
 // --- --- [ RENDERING ] --- ---
 
-//*
 C2D_TextBuf buftxt_messageContent[MAX_REND_MESSAGES], buftxt_messageUsername[MAX_REND_MESSAGES];
 C2D_Text txt_messageContent[MAX_REND_MESSAGES], txt_messageUsername[MAX_REND_MESSAGES];
 
@@ -559,7 +558,6 @@ void ParseTextMessages(struct Channel *channel_struct){
     //Only create buffers if they DONT exist. We assume that if the 0th buffer exists, all of them have been created (which should obviously be true)
     if (!buftxt_messageContent[0] || !buftxt_messageUsername[0]){
         for (int i = 0; i < MAX_REND_MESSAGES; i++){
-            printf("Creating C2D Buffers\n");
             buftxt_messageContent[i] = C2D_TextBufNew(4); //TODO: This is the maximum glyphs per message when its rendered in a message list. I want to cut long messages so everything would be cleaner, and to be able to skip scrolling through walls of text basically. Im thinking about being able to select a message to fully read it, in case it longer than this character limit. 
             //NVM for now lets not do this
             //Im setting the buffers to some low arbritary value because below they will get resized to (almost) perfectly fit the usernames/messages
@@ -583,7 +581,7 @@ void ParseTextMessages(struct Channel *channel_struct){
                 }
             }
 
-            printf("Parsing for buffer %i\n", i);
+            //printf("Parsing for buffer %i\n", i);
             /*/
             //lala more debugging
             printf("Usr ptr: %p | Cont ptr: %p\n", username, channel_struct->messages[message_arr_index].content);
@@ -594,7 +592,7 @@ void ParseTextMessages(struct Channel *channel_struct){
             //*/
 
             C2D_TextBufClear(buftxt_messageUsername[i]);
-            buftxt_messageUsername[i] = C2D_TextBufResize(buftxt_messageUsername[i], strlen(username)*1.5); //resize the buffer to be able to hold the exact length of the username
+            buftxt_messageUsername[i] = C2D_TextBufResize(buftxt_messageUsername[i], strlen(username)*1.2+1); //resize the buffer to be able to hold the exact length of the username (+a little headroom i guess)
             //TODO: consider skipping resizing if the buffer is already big enough. Though im not sure if thats worth doing
             // Parse Usernames
             C2D_TextParse(&txt_messageUsername[i], buftxt_messageUsername[i], username);
@@ -603,7 +601,7 @@ void ParseTextMessages(struct Channel *channel_struct){
             //printf("User Height: %f\n", channel_struct->messages[message_arr_index].username_c2d_height);
 
             C2D_TextBufClear(buftxt_messageContent[i]);
-            buftxt_messageContent[i] = C2D_TextBufResize(buftxt_messageContent[i], strlen(channel_struct->messages[message_arr_index].content)*1.5); // resize buffer. I know that for C2D spaces dont count as "glyphs", but i using strlen should be close enough, even though i technically dont need to account for spaces. Realistically the buffer will be slightly bigger than needed if the message contains spaces
+            buftxt_messageContent[i] = C2D_TextBufResize(buftxt_messageContent[i], strlen(channel_struct->messages[message_arr_index].content)*1.2+1); // resize buffer. I know that for C2D spaces dont count as "glyphs", but i using strlen should be close enough, even though i technically dont need to account for spaces. Realistically the buffer will be slightly bigger than needed if the message contains spaces
             
             // Parse Contents
             C2D_TextParse(&txt_messageContent[i], buftxt_messageContent[i], channel_struct->messages[message_arr_index].content); 
@@ -618,34 +616,32 @@ void ParseTextMessages(struct Channel *channel_struct){
     // I originally thought about doing this in the rendering function, but then i realized calculating this each frame as the messages gets rendered is unnecessary.
     // The for loop goes backwards beacuse of the order messages are stored. The most recent message is the last in the array, but it would get rendered first.
     channel_struct->total_message_height = 0; // reset this first...
-    for (int i = MAX_REND_MESSAGES-1; i > 0; i--){
+    for (int i = MAX_REND_MESSAGES-1; i >= 0; i--){
         int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
-        float final_message_pixel_start = 0;
-        final_message_pixel_start += channel_struct->total_message_height;
         if (channel_struct->messages[message_arr_index].attachment_count <= 0 && channel_struct->messages[message_arr_index].content_c2d_height <= 0) continue; //C2D_TextGetDimensions might output 0 if the message content is empty. Normally messages cant be empty, BUT if it has an attachment they can be empty. If both are 0 then that means its a non-existing message and should get skipped
-        // wait cant i just check if content is NULL??
-        if (channel_struct->messages[message_arr_index].attachment_count >= 1) final_message_pixel_start += channel_struct->messages[message_arr_index].username_c2d_height; // if theres attachments i want to leave space to render an [attachment] indicator
+        float this_message_height = 0;
         
-        final_message_pixel_start += channel_struct->messages[message_arr_index].content_c2d_height;
+        if (channel_struct->messages[message_arr_index].attachment_count >= 1)  this_message_height += channel_struct->messages[message_arr_index].username_c2d_height; // if theres attachments i want to leave space to render an [attachment] indicator
+        
+        this_message_height += channel_struct->messages[message_arr_index].content_c2d_height;
 
-        final_message_pixel_start += channel_struct->messages[message_arr_index].username_c2d_height;
+        this_message_height += channel_struct->messages[message_arr_index].username_c2d_height;
 
-        channel_struct->messages[message_arr_index].content_message_start = final_message_pixel_start;
+        channel_struct->messages[message_arr_index].content_message_start = this_message_height;
 
-        channel_struct->total_message_height += final_message_pixel_start;
+        channel_struct->total_message_height += this_message_height;
 
         printf("Message %i height: %f\n", i, channel_struct->total_message_height);
     }
     printf("Total message height: %f\n", channel_struct->total_message_height);
 }
-//*/
 
-void DrawTextMessages(struct Channel *channel_struct){
+void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset){
     if (!channel_struct) return;
 
     int start_index = (channel_struct->message_index - channel_struct->total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
-    float y = 240.0f;
-    for (int i = MAX_REND_MESSAGES-1; i > 0; i--){
+    float y = 240.0f + scrolling_offset;
+    for (int i = MAX_REND_MESSAGES-1; i >= 0; i--){
         int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
         if (channel_struct->messages[message_arr_index].content == NULL) continue;
         
@@ -657,6 +653,13 @@ void DrawTextMessages(struct Channel *channel_struct){
     }
 }
     
+void Buf_C2D_Cleanup(){
+    printf("Deleting C2D Buffers...\n");
+    for (int i = 0; i < MAX_REND_MESSAGES; i++){
+        if (buftxt_messageContent[i])  C2D_TextBufDelete(buftxt_messageContent[i]);
+        if (buftxt_messageUsername[i]) C2D_TextBufDelete(buftxt_messageUsername[i]);
+    }
+}
 
 void DrawStructuredMessage(struct Channel *channel_struct, int array_size, float scrolling_offset) {
     if (!channel_struct) return;

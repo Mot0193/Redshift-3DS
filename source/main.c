@@ -29,6 +29,7 @@ char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, u
 size_t selected_quark = 0;
 size_t selected_channel = 0;
 size_t entered_selected_channel = 0;
+static bool refresh_message_array_parsing = true;
     
 LightLock MessageWriterLock;
 LightLock CurlGatewayLock;
@@ -245,6 +246,7 @@ void GW_reader_thread(void *ws_curl_handle)
 
                             LightLock_Lock(&MessageWriterLock);
                             addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, single_message);
+                            refresh_message_array_parsing = true;
                             LightLock_Unlock(&MessageWriterLock);
 
                             cJSON_Delete(single_message);
@@ -266,6 +268,7 @@ void GW_reader_thread(void *ws_curl_handle)
             
                     LightLock_Lock(&MessageWriterLock);
                     addMessageToArray(&joined_quarks[selected_quark].channels[i], MAX_REND_MESSAGES, json_response);
+                    refresh_message_array_parsing = true;
                     LightLock_Unlock(&MessageWriterLock);
                     break;
                 }
@@ -332,7 +335,7 @@ bool touchingArea(touchPosition touch, touchPosition target1, touchPosition targ
 
 int main() {
     gfxInitDefault();
-    consoleInit(GFX_BOTTOM, NULL);
+    //consoleInit(GFX_BOTTOM, NULL);
     printf("Console Initialized!\n");
 
     initSocketService();
@@ -503,22 +506,26 @@ int main() {
         }
 
         if (kDown & KEY_A){
-            // get recent messages in selected channel on A press
-            char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, 10);
+            // get recent messages in selected channel on A press //TODO: Make this automatic when you enter a channel
+            char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, MAX_REND_MESSAGES);
             GW_SendFrame(curl_GW_handle, getmessagerequest);
-            free(getmessagerequest);
-            
+            free(getmessagerequest);  
         }
         if (kDown & KEY_B){
         }
         if (kDown & KEY_Y){
-            LightLock_Lock(&MessageWriterLock);
-            ParseTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel]);
-            LightLock_Unlock(&MessageWriterLock);
         }
 
         if (abs(CPadPos.dy) >= 15){
-            scroll_offset += (CPadPos.dy / 24);
+            if (joined_quarks[selected_quark].channels[entered_selected_channel].total_message_height > 0){
+                scroll_offset += (CPadPos.dy / 24.0f);
+                if (scroll_offset < 0.0f) scroll_offset = 0.0f;
+
+                float max_scroll = joined_quarks[selected_quark].channels[entered_selected_channel].total_message_height - joined_quarks[selected_quark].channels[entered_selected_channel].messages[0].content_message_start;
+                if (scroll_offset > max_scroll) scroll_offset = max_scroll;
+
+                //printf("\x1b[1;1HScrollOffset: %f", scroll_offset);
+            }
         }
 
         
@@ -550,6 +557,13 @@ int main() {
             selected_channel = 0;
             entered_selected_channel = 0; 
         }
+
+        if(refresh_message_array_parsing == true){
+            LightLock_Lock(&MessageWriterLock);
+            ParseTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel]);
+            LightLock_Unlock(&MessageWriterLock);
+            refresh_message_array_parsing = false;
+        }
         
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
@@ -557,20 +571,15 @@ int main() {
         C2D_TargetClear(topScreen, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(topScreen);
 
-        if (kHeld & KEY_B){
-            LightLock_Lock(&MessageWriterLock);
-            DrawTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel]);
-            LightLock_Unlock(&MessageWriterLock);
-        }
+        LightLock_Lock(&MessageWriterLock);
+        DrawTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel], scroll_offset);
+        LightLock_Unlock(&MessageWriterLock);
 
-        //LightLock_Lock(&MessageWriterLock);
-        //DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);
-        //LightLock_Unlock(&MessageWriterLock);
         //*/
 
-        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+        //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
-        /*
+        //*
         C2D_TargetClear(botScreen, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(botScreen);
         DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
@@ -578,20 +587,19 @@ int main() {
         C3D_FrameEnd(0);
     }
     exit_redshift:
-    printf("Exiting...");
+    printf("Exiting...\n");
 
-    C2D_TextBufDelete(text_contentBuf);
-    C2D_TextBufDelete(text_usernameBuf);
+    Buf_C2D_Cleanup();
 
     runThreads = false;
 
-    threadJoin(thread_GW_reader, 1000000000); // 1000000000 Nanoseconds = 1 Second // i mean... do i even need to wait for threads... clearly the timeout will always get reached because my threads take at most 40 seconds to finish
+    threadJoin(thread_GW_reader, 0.5 * 1000000000); // 1000000000 Nanoseconds = 1 Second // i mean... do i even need to wait for threads... clearly the timeout will always get reached because my threads take at most 40 seconds to finish
     if (thread_GW_reader) threadFree(thread_GW_reader);
 
-    threadJoin(thread_GW_heartbeat, 1000000000);
+    threadJoin(thread_GW_heartbeat, 0.5 * 1000000000);
     if (thread_GW_heartbeat) threadFree(thread_GW_heartbeat);
 
-    threadJoin(thread_messageSender, 1000000000);
+    threadJoin(thread_messageSender, 0.5 * 1000000000);
     if (thread_messageSender) threadFree(thread_messageSender);
 
     curl_easy_cleanup(curl_GW_handle);
