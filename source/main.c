@@ -505,11 +505,7 @@ int main() {
             }
         }
 
-        if (kDown & KEY_A){
-            // get recent messages in selected channel on A press //TODO: Make this automatic when you enter a channel
-            char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, MAX_REND_MESSAGES);
-            GW_SendFrame(curl_GW_handle, getmessagerequest);
-            free(getmessagerequest);  
+        if (kDown & KEY_A){ 
         }
         if (kDown & KEY_B){
         }
@@ -547,10 +543,18 @@ int main() {
         if (kDown & KEY_DRIGHT){
             if (channel_select){
                 entered_selected_channel = selected_channel;
+                refresh_message_array_parsing = true;
+                scroll_offset = 0;
             } else {
                 channel_select = true;
             }
-            if (joined_quarks[selected_quark].channels_count>0) strcpy(selected_channel_id, joined_quarks[selected_quark].channels[entered_selected_channel].channel_id);
+            if (joined_quarks[selected_quark].channels_count>0){
+                strcpy(selected_channel_id, joined_quarks[selected_quark].channels[entered_selected_channel].channel_id);
+                // get recent messages in selected channel
+                char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, MAX_REND_MESSAGES);
+                GW_SendFrame(curl_GW_handle, getmessagerequest);
+                free(getmessagerequest); 
+            }
         }
         if (kDown & KEY_DLEFT){
             channel_select = false;

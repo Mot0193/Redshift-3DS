@@ -16,7 +16,7 @@ C2D_Text contentText, usernameText;
 #define MAX_CHAR_PER_MESSAGE_LINE 60
 #define LQ_IDLENGTH 128 // 24 + 1 for null terminator.. i think. I think im right since with 24 something falls over
 
-#define MAX_REND_MESSAGES 10 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
+#define MAX_REND_MESSAGES 20 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
 
 #define MAX_CHANNEL_QUARK 8 // the max channels or quarks that should get displayed on a *page*
 
