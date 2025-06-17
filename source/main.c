@@ -510,7 +510,6 @@ int main() {
             
         }
         if (kDown & KEY_B){
-            DrawTextMessages();
         }
         if (kDown & KEY_Y){
             LightLock_Lock(&MessageWriterLock);
@@ -557,6 +556,12 @@ int main() {
         //*
         C2D_TargetClear(topScreen, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(topScreen);
+
+        if (kHeld & KEY_B){
+            LightLock_Lock(&MessageWriterLock);
+            DrawTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel]);
+            LightLock_Unlock(&MessageWriterLock);
+        }
 
         //LightLock_Lock(&MessageWriterLock);
         //DrawStructuredMessage(&joined_quarks[selected_quark].channels[entered_selected_channel], MAX_REND_MESSAGES, scroll_offset);

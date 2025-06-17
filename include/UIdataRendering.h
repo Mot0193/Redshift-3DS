@@ -82,7 +82,11 @@ struct MessageStructure {
 
     char channelId[LQ_IDLENGTH];
 
-    int content_line_number;
+    int content_line_number; // probably not useful anymore. This was used for old rendering to figure out how much space multiline messages use.
+    float content_c2d_height; // the total height in pixels of the entire message (multiline or not). See ParseTextMessages
+    float content_message_start; // the pixel number where each message starts (basically the top of the message "block", including the username). Used for the auto message selection scrolling thing
+
+    float username_c2d_height; // the height of the username. It should be only 1 line long, which means this is also the "default single character/line height for text that uses the same size and font as usernames and messages". Try having this as the variable name
 };
 
 // --- [ Quark/Channel Structs ] ---
@@ -95,6 +99,7 @@ struct Channel {
     struct MessageStructure messages[MAX_REND_MESSAGES];
     int message_index; // Tracks where the next message should be inserted
     int total_messages;
+    float total_message_height; // how many pixels the entire message list takes up. Used for message auto selection
 };
 
 struct Quark {
@@ -555,10 +560,10 @@ void ParseTextMessages(struct Channel *channel_struct){
     if (!buftxt_messageContent[0] || !buftxt_messageUsername[0]){
         for (int i = 0; i < MAX_REND_MESSAGES; i++){
             printf("Creating C2D Buffers\n");
-            buftxt_messageContent[i] = C2D_TextBufNew(256); //TODO: This is the maximum glyphs per message when its rendered in a message list. I want to cut long messages so everything would be cleaner, and to be able to skip scrolling through walls of text basically. Im thinking about being able to select a message to fully read it, in case it longer than this character limit. 
+            buftxt_messageContent[i] = C2D_TextBufNew(4); //TODO: This is the maximum glyphs per message when its rendered in a message list. I want to cut long messages so everything would be cleaner, and to be able to skip scrolling through walls of text basically. Im thinking about being able to select a message to fully read it, in case it longer than this character limit. 
             //NVM for now lets not do this
             //Im setting the buffers to some low arbritary value because below they will get resized to (almost) perfectly fit the usernames/messages
-            buftxt_messageUsername[i] = C2D_TextBufNew(64);
+            buftxt_messageUsername[i] = C2D_TextBufNew(4);
         }
     }
     
@@ -580,36 +585,78 @@ void ParseTextMessages(struct Channel *channel_struct){
 
             printf("Parsing for buffer %i\n", i);
             /*/
+            //lala more debugging
             printf("Usr ptr: %p | Cont ptr: %p\n", username, channel_struct->messages[message_arr_index].content);
             printf("Usr len: %u | Con len: %u\n", strlen(username), strlen(channel_struct->messages[message_arr_index].content));
             printf("Username value: %s\n", username);
             printf("Content value: %s\n", channel_struct->messages[message_arr_index].content);
-            usleep(600 * 1000);
+            usleep(300 * 1000);
             //*/
 
             C2D_TextBufClear(buftxt_messageUsername[i]);
-            //C2D_TextBufResize(buftxt_messageUsername[i], strlen(username)); //resize the buffer to be able to hold the exact length of the username
+            buftxt_messageUsername[i] = C2D_TextBufResize(buftxt_messageUsername[i], strlen(username)*1.5); //resize the buffer to be able to hold the exact length of the username
             //TODO: consider skipping resizing if the buffer is already big enough. Though im not sure if thats worth doing
             // Parse Usernames
             C2D_TextParse(&txt_messageUsername[i], buftxt_messageUsername[i], username);
             C2D_TextOptimize(&txt_messageUsername[i]);
-            
+            C2D_TextGetDimensions(&txt_messageUsername[i], MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, NULL, &channel_struct->messages[message_arr_index].username_c2d_height);
+            //printf("User Height: %f\n", channel_struct->messages[message_arr_index].username_c2d_height);
+
             C2D_TextBufClear(buftxt_messageContent[i]);
-            //C2D_TextBufResize(buftxt_messageContent[i], strlen(channel_struct->messages[message_arr_index].content)); // resize buffer. I know that for C2D spaces dont count as "glyphs", but i using strlen should be close enough, even though i technically dont need to account for spaces. Realistically the buffer will be slightly bigger than needed if the message contains spaces
+            buftxt_messageContent[i] = C2D_TextBufResize(buftxt_messageContent[i], strlen(channel_struct->messages[message_arr_index].content)*1.5); // resize buffer. I know that for C2D spaces dont count as "glyphs", but i using strlen should be close enough, even though i technically dont need to account for spaces. Realistically the buffer will be slightly bigger than needed if the message contains spaces
             
             // Parse Contents
             C2D_TextParse(&txt_messageContent[i], buftxt_messageContent[i], channel_struct->messages[message_arr_index].content); 
             C2D_TextOptimize(&txt_messageContent[i]);
+            C2D_TextGetDimensions(&txt_messageContent[i], MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, NULL, &channel_struct->messages[message_arr_index].content_c2d_height);
+            //printf("Content Height: %f\n", channel_struct->messages[message_arr_index].content_c2d_height);
+            //saves the message height so i dont have to run getdimensions on every frame later. This is used to properly position multiline messages
         }
     }
+
+    // This calculates each message's "start", basically its height in relation to the bottom of the screen, as well as the total message height. Used for auto mesasge selection when scrolling.
+    // I originally thought about doing this in the rendering function, but then i realized calculating this each frame as the messages gets rendered is unnecessary.
+    // The for loop goes backwards beacuse of the order messages are stored. The most recent message is the last in the array, but it would get rendered first.
+    channel_struct->total_message_height = 0; // reset this first...
+    for (int i = MAX_REND_MESSAGES-1; i > 0; i--){
+        int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
+        float final_message_pixel_start = 0;
+        final_message_pixel_start += channel_struct->total_message_height;
+        if (channel_struct->messages[message_arr_index].attachment_count <= 0 && channel_struct->messages[message_arr_index].content_c2d_height <= 0) continue; //C2D_TextGetDimensions might output 0 if the message content is empty. Normally messages cant be empty, BUT if it has an attachment they can be empty. If both are 0 then that means its a non-existing message and should get skipped
+        // wait cant i just check if content is NULL??
+        if (channel_struct->messages[message_arr_index].attachment_count >= 1) final_message_pixel_start += channel_struct->messages[message_arr_index].username_c2d_height; // if theres attachments i want to leave space to render an [attachment] indicator
+        
+        final_message_pixel_start += channel_struct->messages[message_arr_index].content_c2d_height;
+
+        final_message_pixel_start += channel_struct->messages[message_arr_index].username_c2d_height;
+
+        channel_struct->messages[message_arr_index].content_message_start = final_message_pixel_start;
+
+        channel_struct->total_message_height += final_message_pixel_start;
+
+        printf("Message %i height: %f\n", i, channel_struct->total_message_height);
+    }
+    printf("Total message height: %f\n", channel_struct->total_message_height);
 }
 //*/
 
-void DrawTextMessages(){
-    float textHeight;
-    C2D_TextGetDimensions(&txt_messageContent[9], MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, NULL, &textHeight);
-    printf("Message Height: %f\n", textHeight);
+void DrawTextMessages(struct Channel *channel_struct){
+    if (!channel_struct) return;
+
+    int start_index = (channel_struct->message_index - channel_struct->total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
+    float y = 240.0f;
+    for (int i = MAX_REND_MESSAGES-1; i > 0; i--){
+        int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
+        if (channel_struct->messages[message_arr_index].content == NULL) continue;
+        
+        y -= channel_struct->messages[message_arr_index].content_c2d_height + ((channel_struct->messages[message_arr_index].attachment_count >= 1) ? channel_struct->messages[message_arr_index].username_c2d_height : 0); // if theres attachments leave space for the [attachment] indicator. TODO: actually render the indicator
+        C2D_DrawText(&txt_messageContent[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, C2D_Color32(255, 0, 0, 255));
+        y -= channel_struct->messages[message_arr_index].username_c2d_height;
+        C2D_DrawText(&txt_messageUsername[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, C2D_Color32(255, 255, 255, 255));
+        y -= channel_struct->messages[message_arr_index].username_c2d_height / 5; // add some padding in between messages
+    }
 }
+    
 
 void DrawStructuredMessage(struct Channel *channel_struct, int array_size, float scrolling_offset) {
     if (!channel_struct) return;
