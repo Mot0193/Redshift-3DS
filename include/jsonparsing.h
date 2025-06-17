@@ -34,6 +34,7 @@ char *GW_LQAssembleGetMessages(char *usertoken, char *channelid, uint64_t *befor
 
     char *assembled = cJSON_PrintUnformatted(rpcmessage);
     //printf("Assembled for GetMessages: %s\n", assembled);
+    //usleep(5000 * 1000);
 
     cJSON_Delete(rpcmessage);
     return assembled; //YOU MORON YOU NEED TO FREE THIS :OTL:

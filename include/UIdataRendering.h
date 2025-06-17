@@ -16,7 +16,7 @@ C2D_Text contentText, usernameText;
 #define MAX_CHAR_PER_MESSAGE_LINE 60
 #define LQ_IDLENGTH 128 // 24 + 1 for null terminator.. i think. I think im right since with 24 something falls over
 
-#define MAX_REND_MESSAGES 20 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
+#define MAX_REND_MESSAGES 15 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
 
 #define MAX_CHANNEL_QUARK 8 // the max channels or quarks that should get displayed on a *page*
 
@@ -87,6 +87,8 @@ struct MessageStructure {
     float content_message_start; // the pixel number where each message starts (basically the top of the message "block", including the username). Used for the auto message selection scrolling thing
 
     float username_c2d_height; // the height of the username. It should be only 1 line long, which means this is also the "default single character/line height for text that uses the same size and font as usernames and messages". Try having this as the variable name
+
+    bool same_username_as_last; // if true, the username of this message is the same as the last message. Used to skip drawing the username if thats the case. Quarky developer(s?) might recognize this as isContinuation, though we can agree my variable names are superior
 };
 
 // --- [ Quark/Channel Structs ] ---
@@ -454,7 +456,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
     snprintf(channel_struct->messages[message_index].message_id, sizeof(channel_struct->messages[message_index].message_id), "%s", message_id->valuestring);
     channel_struct->messages[message_index].content = wrappedContent;
     channel_struct->messages[message_index].ua = strdup(ua->valuestring);
-    channel_struct->messages[message_index].timestamp = timestamp->valuedouble;
+    channel_struct->messages[message_index].timestamp = (uint64_t)timestamp->valuedouble;
     channel_struct->messages[message_index].edited = cJSON_IsTrue(edited);
 
     snprintf(channel_struct->messages[message_index].author_id, sizeof(channel_struct->messages[message_index].author_id), "%s", author_id->valuestring);
@@ -567,6 +569,7 @@ void ParseTextMessages(struct Channel *channel_struct){
     
 
     int start_index = (channel_struct->message_index - channel_struct->total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
+    char *lastusername = NULL;
     for (int i = 0; i < MAX_REND_MESSAGES; i++){
         int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
 
@@ -576,10 +579,14 @@ void ParseTextMessages(struct Channel *channel_struct){
             for (int j = 0; j < channel_struct->messages[message_arr_index].specialAttribute_count; j++) {
                 if (channel_struct->messages[message_arr_index].specialAttributes[j].type && strcmp(channel_struct->messages[message_arr_index].specialAttributes[j].type, "botMessage") == 0 && channel_struct->messages[message_arr_index].specialAttributes[j].username) {
                     //ifthetypeisbotMessageandifBotUsernameexists..
-                    username = channel_struct->messages[message_arr_index].specialAttributes[j].username;
+                    username = channel_struct->messages[message_arr_index].specialAttributes[j].username; 
                     break; // use the botMessage username instead
                 }
             }
+            if (lastusername && strcmp(lastusername, username) == 0){
+                channel_struct->messages[message_arr_index].same_username_as_last = true;
+            } else channel_struct->messages[message_arr_index].same_username_as_last = false;
+            lastusername = username;
 
             //printf("Parsing for buffer %i\n", i);
             /*/
@@ -592,17 +599,29 @@ void ParseTextMessages(struct Channel *channel_struct){
             //*/
 
             C2D_TextBufClear(buftxt_messageUsername[i]);
-            buftxt_messageUsername[i] = C2D_TextBufResize(buftxt_messageUsername[i], strlen(username)*1.2+1); //resize the buffer to be able to hold the exact length of the username (+a little headroom i guess)
+            C2D_TextBuf resizedUsernameBuf = C2D_TextBufResize(buftxt_messageUsername[i], strlen(username)*1.2+1); //resize the buffer to be able to hold the exact length of the username (+a little headroom i guess)
             //TODO: consider skipping resizing if the buffer is already big enough. Though im not sure if thats worth doing
+            if (!resizedUsernameBuf) {
+                printf("TextBufResize failed when parsing username for message %i\n", i);
+                continue;
+            } else {
+                buftxt_messageUsername[i] = resizedUsernameBuf;
+            }
             // Parse Usernames
             C2D_TextParse(&txt_messageUsername[i], buftxt_messageUsername[i], username);
             C2D_TextOptimize(&txt_messageUsername[i]);
             C2D_TextGetDimensions(&txt_messageUsername[i], MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, NULL, &channel_struct->messages[message_arr_index].username_c2d_height);
             //printf("User Height: %f\n", channel_struct->messages[message_arr_index].username_c2d_height);
 
+
             C2D_TextBufClear(buftxt_messageContent[i]);
-            buftxt_messageContent[i] = C2D_TextBufResize(buftxt_messageContent[i], strlen(channel_struct->messages[message_arr_index].content)*1.2+1); // resize buffer. I know that for C2D spaces dont count as "glyphs", but i using strlen should be close enough, even though i technically dont need to account for spaces. Realistically the buffer will be slightly bigger than needed if the message contains spaces
-            
+            C2D_TextBuf resizedContentBuf = C2D_TextBufResize(buftxt_messageContent[i], strlen(channel_struct->messages[message_arr_index].content)*1.2+1); // resize buffer. I know that for C2D spaces dont count as "glyphs", but i using strlen should be close enough, even though i technically dont need to account for spaces. Realistically the buffer will be slightly bigger than needed if the message contains spaces // you fool...
+            if (!resizedContentBuf) {
+                printf("TextBufResize failed when parsing content for message %i\n", i);
+                continue;
+            } else {
+                buftxt_messageContent[i] = resizedContentBuf;
+            }
             // Parse Contents
             C2D_TextParse(&txt_messageContent[i], buftxt_messageContent[i], channel_struct->messages[message_arr_index].content); 
             C2D_TextOptimize(&txt_messageContent[i]);
@@ -625,15 +644,20 @@ void ParseTextMessages(struct Channel *channel_struct){
         
         this_message_height += channel_struct->messages[message_arr_index].content_c2d_height;
 
-        this_message_height += channel_struct->messages[message_arr_index].username_c2d_height;
+        if (channel_struct->messages[message_arr_index].same_username_as_last == false) {
+            this_message_height += channel_struct->messages[message_arr_index].username_c2d_height;
+            this_message_height += channel_struct->messages[message_arr_index].username_c2d_height / 4;
+        } else {
+            this_message_height += channel_struct->messages[message_arr_index].username_c2d_height / 6;
+        }
 
         channel_struct->messages[message_arr_index].content_message_start = this_message_height;
 
         channel_struct->total_message_height += this_message_height;
 
-        printf("Message %i height: %f\n", i, channel_struct->total_message_height);
+        //printf("Message %i height: %f\n", i, channel_struct->total_message_height);
     }
-    printf("Total message height: %f\n", channel_struct->total_message_height);
+    //printf("Total message height: %f\n", channel_struct->total_message_height);
 }
 
 void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset){
@@ -647,9 +671,14 @@ void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset){
         
         y -= channel_struct->messages[message_arr_index].content_c2d_height + ((channel_struct->messages[message_arr_index].attachment_count >= 1) ? channel_struct->messages[message_arr_index].username_c2d_height : 0); // if theres attachments leave space for the [attachment] indicator. TODO: actually render the indicator
         C2D_DrawText(&txt_messageContent[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, C2D_Color32(255, 0, 0, 255));
-        y -= channel_struct->messages[message_arr_index].username_c2d_height;
-        C2D_DrawText(&txt_messageUsername[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, C2D_Color32(255, 255, 255, 255));
-        y -= channel_struct->messages[message_arr_index].username_c2d_height / 5; // add some padding in between messages
+        
+        if (channel_struct->messages[message_arr_index].same_username_as_last){
+            y -= channel_struct->messages[message_arr_index].username_c2d_height / 6;
+        } else {
+            y -= channel_struct->messages[message_arr_index].username_c2d_height;
+            C2D_DrawText(&txt_messageUsername[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, C2D_Color32(255, 255, 255, 255));
+            y -= channel_struct->messages[message_arr_index].username_c2d_height / 4; // add some padding in between messages
+        }
     }
 }
     
