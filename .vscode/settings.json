@@ -21,6 +21,12 @@
         "uidatarendering.h": "c",
         "types.h": "c",
         "cstdlib": "c",
-        "networking.h": "c"
+        "networking.h": "c",
+        "unistd.h": "c",
+        "synchronization.h": "c",
+        "time.h": "c",
+        "datarendering.h": "c",
+        "errno.h": "c",
+        "stddef.h": "c"
     }
 }

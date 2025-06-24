@@ -1,128 +1,28 @@
-#ifndef RENDERING_H
-#define RENDERING_H
+#include <stdlib.h>
+#include <errno.h>
+#include <citro2d.h>
+#include <curl/curl.h>
+#include <unistd.h>
+
+#include "cJSON.h"
+#include "networking.h"
+#include "dataRendering.h"
+
+// Text buffers
+C2D_TextBuf buftxt_messageContent[MAX_REND_MESSAGES], buftxt_messageUsername[MAX_REND_MESSAGES];
+C2D_TextBuf text_contentBuf, text_usernameBuf; 
+
+// Text objects
+C2D_Text contentText, usernameText;
+C2D_Text txt_messageContent[MAX_REND_MESSAGES], txt_messageUsername[MAX_REND_MESSAGES];
 
 extern LightLock MessageWriterLock;
 
-// Text buffers
+size_t joined_quark_count = 0;
+size_t total_quarks_name_size = 0; // to get the length of all quark names, for allocating the C2D text buffer
 
-C2D_TextBuf text_contentBuf, text_usernameBuf; 
-
-//C2D_TextBuf quarkBuf, channelBuf;
-
-// Text objects
-
-C2D_Text contentText, usernameText;
-
-#define MAX_CHAR_PER_MESSAGE_LINE 60
-#define LQ_IDLENGTH 128 // 24 + 1 for null terminator.. i think. I think im right since with 24 something falls over
-
-#define MAX_REND_MESSAGES 15 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
-
-#define MAX_CHANNEL_QUARK 8 // the max channels or quarks that should get displayed on a *page*
-
-#define MESSAGE_USERNAME_TEXT_SIZE 0.5f
-
-#define QUARK_CHANNEL_TEXT_SIZE 0.5f
-
-// --- [ Message Structs ] ---
-struct Attachment {
-    char *url;
-    int size;
-    char *type;
-    char *filename;
-    // --- --- ---
-    int height;
-    int width;
-};
-
-struct SpecialAttribute {
-    char *type;
-
-    // --- botMessage ---
-    char *username; 
-    char *avatarUri; 
-    // --- --------- ---
-
-    // --- Reply ---
-    char replyTo[LQ_IDLENGTH];
-    // --- ----- ---
-
-    // --- ClientAttributes ---
-    uint64_t discordMessageId;
-    bool quarkcord;
-
-    char *plaintext;
-    // --- --------- --- 
-};
-
-struct MessageStructure {
-    // --- Message ---
-    char message_id[LQ_IDLENGTH];
-    char *content;
-    char *ua;
-    uint64_t timestamp;
-    bool edited;
-    
-    struct Attachment *attachments;
-    int attachment_count;
-
-    
-    struct SpecialAttribute *specialAttributes;
-    int specialAttribute_count;
-    // --- ------- ---
-
-    // --- Author ---
-    char author_id[LQ_IDLENGTH];
-    char *username;
-    bool admin; 
-    bool isbot; 
-    bool secretThirdThing; // whatever this is
-    char *avatarUri;
-    // --- ------ ---
-
-    char channelId[LQ_IDLENGTH];
-
-    int content_line_number; // probably not useful anymore. This was used for old rendering to figure out how much space multiline messages use.
-    float content_c2d_height; // the total height in pixels of the entire message (multiline or not). See ParseTextMessages
-    float content_message_start; // the pixel number where each message starts (basically the top of the message "block", including the username). Used for the auto message selection scrolling thing
-
-    float username_c2d_height; // the height of the username. It should be only 1 line long, which means this is also the "default single character/line height for text that uses the same size and font as usernames and messages". Try having this as the variable name
-
-    bool same_username_as_last; // if true, the username of this message is the same as the last message. Used to skip drawing the username if thats the case. Quarky developer(s?) might recognize this as isContinuation, though we can agree my variable names are superior
-};
-
-// --- [ Quark/Channel Structs ] ---
-struct Channel {
-    char channel_id[LQ_IDLENGTH];
-    char *name;
-    char *description;
-    // --- --- ---
-
-    struct MessageStructure messages[MAX_REND_MESSAGES];
-    int message_index; // Tracks where the next message should be inserted
-    int total_messages;
-    float total_message_height; // how many pixels the entire message list takes up. Used for message auto selection
-};
-
-struct Quark {
-    char quark_id[LQ_IDLENGTH];
-    char *name;
-    char *iconUri;
-    char *invite;
-    bool inviteEnabled;
-    // --- --- ---
-    char **owners; // NULL when thers no owners
-    int owners_count; //number of owners
-    
-    struct Channel *channels;
-    int channels_count;
-    int channels_total_name_length; //each quark stores the total length of its channel names combined. Used for allocating C2D text buffers
-};
 
 // --- [ Quark/Channel Functions ] ---
-static size_t joined_quark_count = 0;
-size_t total_quarks_name_size = 0; // to get the length of all quark names, for allocating the C2D text buffer
-//size_t totalChannelsNameSize = 0; // See channels_total_name_length; in Quark struct
 void freeQuarks(struct Quark **joined_quarks){
     if (joined_quarks == NULL || *joined_quarks == NULL) {
         printf("QuarkArray is NULL, wont free\n");
@@ -547,9 +447,6 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 
 // --- --- [ RENDERING ] --- ---
 
-C2D_TextBuf buftxt_messageContent[MAX_REND_MESSAGES], buftxt_messageUsername[MAX_REND_MESSAGES];
-C2D_Text txt_messageContent[MAX_REND_MESSAGES], txt_messageUsername[MAX_REND_MESSAGES];
-
 void ParseTextMessages(struct Channel *channel_struct){
     // This should in theory only run once, when the message structure updates (e.g getting messages in a channel, getting a new message, message gets edited).
     // Treating the messages as dynamic text and parsing on each frame like the previous rendering function did sounds rather inneficient, so i plan on splitting the parsing and rendering functions.
@@ -690,46 +587,6 @@ void Buf_C2D_Cleanup(){
     }
 }
 
-void DrawStructuredMessage(struct Channel *channel_struct, int array_size, float scrolling_offset) {
-    if (!channel_struct) return;
-
-    float total_messages_height = 0.0f; //start at 0, the top of the screen
-    C2D_TextBufClear(text_contentBuf);
-    C2D_TextBufClear(text_usernameBuf);
-
-    int start_index = (channel_struct->message_index - channel_struct->total_messages + array_size) % array_size;
-    for (int i = 0; i <= array_size-1; i++) {
-        int message_arr_index = (start_index + i) % array_size;
-        if (channel_struct->messages[message_arr_index].content != NULL) {
-
-            const char *username_to_render = channel_struct->messages[message_arr_index].username; // sets the default name to author username
-
-            for (int j = 0; j < channel_struct->messages[message_arr_index].specialAttribute_count; j++) {
-                if (channel_struct->messages[message_arr_index].specialAttributes[j].type && strcmp(channel_struct->messages[message_arr_index].specialAttributes[j].type, "botMessage") == 0 && channel_struct->messages[message_arr_index].specialAttributes[j].username) {
-                    //ifthetypeisbotMessageandifitexists..
-                    username_to_render = channel_struct->messages[message_arr_index].specialAttributes[j].username;
-                    break; // use the botMessage username instead
-                }
-            }
-
-            // Render the determined username
-            C2D_TextParse(&usernameText, text_usernameBuf, username_to_render);
-            C2D_TextOptimize(&usernameText);
-            C2D_DrawText(&usernameText, C2D_WithColor, 0.0f, total_messages_height + scrolling_offset, 0.0f, 0.5f, 0.5f, C2D_Color32(255, 0, 0, 250));
-            total_messages_height += 15; // 15 for username height
-            
-
-            // Render message content
-            C2D_TextParse(&contentText, text_contentBuf, channel_struct->messages[message_arr_index].content);
-            C2D_TextOptimize(&contentText);
-            C2D_DrawText(&contentText, C2D_WithColor, 0.0f, total_messages_height + scrolling_offset, 0.0f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
-            
-            float message_height = channel_struct->messages[message_arr_index].content_line_number * 15; //todo make this use C2D_TextGetDimensions. Might require seperating each message/username into its own buffer/buffer array index. See DrawQuarks for working example
-            total_messages_height += message_height;
-        }
-    }
-}
-
 void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int selected_quark, int selected_channel, int entered_selected_channel){
     float total_quark_channel_height = 50.0f;
 
@@ -801,5 +658,100 @@ void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int 
     }
 }
 
+// --- [ Login Screen ] ---
 
-#endif
+int LQLoginScreen(loginState *loginState, struct Quark *joined_quarks, C3D_RenderTarget *topScreen) {
+  switch (*loginState) {
+    case LOGIN_STATE_BLANK:
+      char loginEmail[128] = {0};
+      char loginPassword[128] = {0};
+
+      C2D_TextBuf bufEmail = C2D_TextBufNew(sizeof(loginEmail));
+      C2D_TextBuf bufPassword = C2D_TextBufNew(sizeof(loginPassword) + 1);
+
+      const char buttons[] =" Input Email\n  Input Password\n  Hold to reveal Password and Email\n  Login\n START Exit";
+      C2D_TextBuf bufLoginButtons = C2D_TextBufNew(sizeof(buttons));
+      C2D_Text txtLoginButtons;
+
+      C2D_TextParse(&txtLoginButtons, bufLoginButtons, buttons);
+      C2D_TextOptimize(&txtLoginButtons);
+
+      while (*loginState != LOGIN_STATE_ATTEMPT) {
+        hidScanInput();
+        u32 kDown = hidKeysDown();
+        u32 kHeld = hidKeysHeld();
+
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        C2D_TargetClear(topScreen, C2D_Color32(0, 0, 0, 255));
+        C2D_SceneBegin(topScreen);
+
+        C2D_DrawText(&txtLoginButtons, C2D_AlignCenter | C2D_WithColor, 200.0f, 10.0f, 0.0f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
+
+        if (kDown & KEY_X) {
+          SwkbdState swkbd;
+
+          swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 1, -1);
+          swkbdSetInitialText(&swkbd, loginEmail);
+          swkbdSetHintText(&swkbd, "Input login email");
+          swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "OK", true);
+          swkbdSetFeatures(&swkbd, SWKBD_PREDICTIVE_INPUT);
+          swkbdSetValidation(&swkbd, SWKBD_ANYTHING, 8, sizeof(loginEmail));
+          swkbdInputText(&swkbd, loginEmail, sizeof(loginEmail));
+        }
+        if (kDown & KEY_B) {
+          SwkbdState swkbd;
+
+          swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 1, -1);
+          swkbdSetInitialText(&swkbd, loginPassword);
+          swkbdSetHintText(&swkbd, "Input password");
+          swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "OK", true);
+          swkbdSetFeatures(&swkbd, SWKBD_PREDICTIVE_INPUT);
+          swkbdSetValidation(&swkbd, SWKBD_ANYTHING, 8, sizeof(loginPassword));
+          swkbdInputText(&swkbd, loginPassword, sizeof(loginPassword));
+        }
+        if (kHeld & KEY_Y) {
+          C2D_Text txtEmail;
+          C2D_Text txtPassword;
+
+          C2D_TextParse(&txtEmail, bufEmail, loginEmail);
+          C2D_TextOptimize(&txtEmail);
+          C2D_DrawText(&txtEmail, C2D_AlignCenter | C2D_WithColor, 200.0f, 100.0f, 0.0f, 0.4f, 0.4f, C2D_Color32(255, 255, 255, 255));
+          C2D_TextBufClear(bufEmail);
+
+          C2D_TextParse(&txtPassword, bufPassword, loginPassword);
+          C2D_TextOptimize(&txtPassword);
+          C2D_DrawText(&txtPassword, C2D_AlignCenter | C2D_WithColor, 200.0f, 120.0f, 0.0f, 0.4f, 0.4f, C2D_Color32(255, 255, 255, 255));
+          C2D_TextBufClear(bufPassword);
+        }
+        if (kDown & KEY_A) {
+          *loginState = LightquarkLogin(LOGIN_STATE_BLANK, loginEmail, loginPassword, joined_quarks);
+          if (bufLoginButtons) C2D_TextBufDelete(bufLoginButtons);
+          if (bufEmail) C2D_TextBufDelete(bufEmail);
+          if (bufPassword) C2D_TextBufDelete(bufPassword);
+          break;
+        }
+        if (kDown & KEY_START) {
+            if (bufLoginButtons) C2D_TextBufDelete(bufLoginButtons);
+            if (bufEmail) C2D_TextBufDelete(bufEmail);
+            if (bufPassword) C2D_TextBufDelete(bufPassword);
+            C3D_FrameEnd(0);
+            return 1;
+        }
+        C3D_FrameEnd(0);
+      }
+    case LOGIN_STATE_ATTEMPT:
+      *loginState = LightquarkLogin(LOGIN_STATE_ATTEMPT, NULL, NULL, joined_quarks);
+      break;
+    case LOGIN_STATE_REFRESH:
+      *loginState = LightquarkLogin(LOGIN_STATE_REFRESH, NULL, NULL, joined_quarks);
+      break;
+    case LOGIN_STATE_FAILED:
+      printf("Login Failed :(\n");
+      return -1;
+      break;
+    case LOGIN_STATE_DONE:
+      printf("Login Successful! :)\n");
+      break;
+    }
+    return 0;
+}

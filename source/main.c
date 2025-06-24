@@ -16,15 +16,20 @@
 #include <curl/curl.h>
 #include "cJSON.h"
 
-#include "UIdataRendering.h"
+#include "dataRendering.h"
 #include "networking.h"
 #include "jsonParsing.h"
 #include "socket3ds.h"
 
-#define GATEWAY_URL "https://gw.ram.lightquark.network"
+#define GATEWAY_URL "https://gw.rem.lightquark.network"
 
-struct Quark *joined_quarks = NULL; // dynamic array for storing joined quarks (and channels)
+struct Quark *joined_quarks = NULL; // dynamic array for storing joined quarks (and channels) // maybe i should make this global so my functions dont have to play hot potato with it
 char selected_channel_id[LQ_IDLENGTH]; // for storing the selected channel id, used to filter websocket messages and stuff
+
+extern char accesstoken[89];
+
+extern size_t joined_quark_count;
+extern size_t total_quarks_name_size;
 
 size_t selected_quark = 0;
 size_t selected_channel = 0;
@@ -36,165 +41,10 @@ static bool refresh_message_array_parsing = false;
 float scroll_offset = 0;
 float rendering_old_messages = false;
 
-    
 LightLock MessageWriterLock;
 LightLock CurlGatewayLock;
 
-FILE *loginfile;
-char accesstoken[89];
-char refreshtoken[91];
 CURL *curl_GW_handle;
-typedef enum {
-    LOGIN_STATE_ATTEMPT,
-    LOGIN_STATE_REFRESH,
-    LOGIN_STATE_BLANK,
-    LOGIN_STATE_DONE,
-    LOGIN_STATE_FAILED
-} LoginState;
-
-LoginState LightquarkLogin(LoginState loginState, char *email, char *password){
-    printf("LoginState: %d\n", loginState);
-    long httpcodecurl = 0;
-
-    if (mkdir("/3ds/redshift", 0775) == -1){
-        if (errno != EEXIST) {
-            perror("Failed to create /3ds/redshift");
-            return LOGIN_STATE_FAILED;
-        }
-    }
-
-    switch (loginState)
-    {
-    case LOGIN_STATE_ATTEMPT:
-        printf("Log in attempt...\n");
-        loginfile = fopen("/3ds/redshift/logindata.txt", "r");
-        if (loginfile == NULL) {
-            printf("Failed to open login file\n");
-            return LOGIN_STATE_BLANK;
-        }
-
-        fgets(accesstoken, sizeof(accesstoken), loginfile);
-        accesstoken[strcspn(accesstoken, "\n")] = '\0';
-        printf("Access Token saved from file: %s\n", accesstoken);
-
-        char *quarks_response = curlRequest("https://lightquark.network/v4/quark", NULL, accesstoken, &httpcodecurl); //get quarks
-        printf("Quark Response HTTP code: %li\n", httpcodecurl);
-        if (httpcodecurl != 200){
-            fclose(loginfile);
-            return LOGIN_STATE_REFRESH; // if code is not ok, aka most likely 401, refresh token
-        }
-        if (quarks_response == NULL) printf("Uh oh quarks response is null\n");
-
-        addQuarksToArray(&joined_quarks, quarks_response);
-        free(quarks_response);
-
-        curl_GW_handle = curlUpgradeGateway(GATEWAY_URL); //upgrde to gateway (WebSocket)
-        if (curl_GW_handle == NULL){
-            printf("Gateway upgrade failed\n");
-            fclose(loginfile);
-            return LOGIN_STATE_REFRESH;
-        }
-        char gw_auth[256];
-        sprintf(gw_auth,"{\"event\": \"authenticate\", \"token\": \"%s\", \"state\": \"\"}", accesstoken);
-        GW_SendFrame(curl_GW_handle, gw_auth); //auth with gateway
-
-        fclose(loginfile);
-        return LOGIN_STATE_DONE;
-
-    case LOGIN_STATE_REFRESH:
-        printf("Refreshing Token...\n");
-        loginfile = fopen("/3ds/redshift/logindata.txt", "r");
-        if (loginfile == NULL) {
-            printf("Failed to open login file\n");
-            return LOGIN_STATE_BLANK;
-        }
-
-        fgets(accesstoken, 128, loginfile);
-        accesstoken[strcspn(accesstoken, "\n")] = '\0';
-        printf("Access Token saved from file: %s\n", accesstoken);
-        
-        fgets(refreshtoken, 128, loginfile);
-        refreshtoken[strcspn(refreshtoken, "\n")] = '\0';
-        printf("Refresh Token saved from file: %s\n", refreshtoken);
-        fclose(loginfile);
-
-        char refreshtokenrequest[256];
-        sprintf(refreshtokenrequest, "{\"accessToken\": \"%s\", \"refreshToken\": \"%s\"}", accesstoken, refreshtoken);
-    
-        char *refresh_response = curlRequest("https://lightquark.network/v4/auth/refresh", refreshtokenrequest, NULL, &httpcodecurl);
-        if (httpcodecurl != 200 || refresh_response == NULL){
-            printf("Failed to refresh tokens\n"); // if code is not ok, aka most likely 401, start blank login
-            return LOGIN_STATE_BLANK;
-        }
-
-        char *ACtoken_refresh = parseResponse(refresh_response, "accessToken");
-        free(refresh_response);
-        printf("Refreshed AC: %s\n", ACtoken_refresh);
-        if (ACtoken_refresh == NULL){
-            printf("Failed to refresh ACtoken. Starting blank re-login...\n");
-            return LOGIN_STATE_BLANK;
-        }
-        
-        loginfile = fopen("/3ds/redshift/logindata.txt", "r+");
-        if (loginfile == NULL) {
-            printf("Failed to open login file\n");
-            return LOGIN_STATE_BLANK;
-        }
-        fseek(loginfile, 0, SEEK_SET);
-        fprintf(loginfile, "%s\n%s\n", ACtoken_refresh, refreshtoken); //writes both new ac and re tokens...
-        free(ACtoken_refresh);
-
-        fclose(loginfile);
-        return LOGIN_STATE_ATTEMPT;
-
-    case LOGIN_STATE_BLANK:
-        printf("Creating logindata file...\n");
-
-        loginfile = fopen("/3ds/redshift/logindata.txt", "w");
-        if (loginfile == NULL) {
-            perror("Error creating logindata file");
-            return LOGIN_STATE_FAILED;
-        }
-
-        char logindata[288];
-        snprintf(logindata, sizeof(logindata), "{\"email\": \"%s\",\"password\": \"%s\"}", email, password);
-        printf("Requesting Tokens...\n");
-        char *auth_response = curlRequest("https://lightquark.network/v4/auth/token", logindata, NULL, &httpcodecurl); //request login
-        printf("HTTP code for request tokens: %li\n", httpcodecurl);
-        if (httpcodecurl != 200 || auth_response == NULL){
-            printf("Failed to request tokens/login with password\n");
-            fclose(loginfile);
-            return LOGIN_STATE_FAILED;
-        }
-
-        printf("Parsing tokens...\n");
-        char *ACtoken = parseResponse(auth_response, "access_token"); //get token(s)
-        char *REtoken = parseResponse(auth_response, "refresh_token");
-        free(auth_response);
-
-        if (ACtoken && REtoken) {
-            printf("AC: %s\n", ACtoken);
-            printf("RE: %s\n", REtoken);
-
-            fprintf(loginfile, "%s\n", ACtoken);
-            fprintf(loginfile, "%s\n", REtoken);
-            printf("Done writing tokens to file.\n");
-
-            free(ACtoken);
-            free(REtoken);
-            fclose(loginfile);
-            return LOGIN_STATE_ATTEMPT;
-        } else {
-            printf("Failed to parse login tokens.\n");
-            fclose(loginfile);
-            return LOGIN_STATE_FAILED;
-        }
-
-    default:
-        printf("LightquarkLogin: Erm what in the floping state you give me\n");
-        return LOGIN_STATE_FAILED;
-    }
-}
 
 volatile bool runThreads = false;
 void GW_reader_thread(void *ws_curl_handle)
@@ -343,6 +193,7 @@ int main() {
     gfxInitDefault();
     consoleInit(GFX_BOTTOM, NULL);
     printf("Console Initialized!\n");
+    usleep(500 * 1000);
 
     initSocketService();
 	atexit(socShutdown);
@@ -357,9 +208,6 @@ int main() {
 
     C3D_RenderTarget* topScreen = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     C3D_RenderTarget* botScreen = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
-    
-    text_contentBuf  = C2D_TextBufNew(512 * MAX_REND_MESSAGES); // todo figure out dynamic allocation for c2d text buffers
-    text_usernameBuf  = C2D_TextBufNew(64 * MAX_REND_MESSAGES); // LQ's max username char count is 64, so 64 x 10*, *MAX_REND_MESSAGES
 
     Thread thread_GW_reader = NULL;
     Thread thread_GW_heartbeat = NULL;
@@ -368,7 +216,7 @@ int main() {
     touchPosition target1; target1.px = 1; target1.py = 1;
     touchPosition target2; target2.px = 320; target2.py = 50;
 
-    LoginState loginState = LOGIN_STATE_ATTEMPT;
+    loginState loginState = LOGIN_STATE_ATTEMPT; 
     while (aptMainLoop()) {
         hidScanInput();
         u32 kDown = hidKeysDown();
@@ -382,92 +230,8 @@ int main() {
             loginState = LOGIN_STATE_BLANK;
         }
         while (loginState != LOGIN_STATE_DONE){ // --- LOGIN SCREEN --- 
-            switch (loginState)
-            {
-            case LOGIN_STATE_BLANK:
-                char loginEmail[128] = {0};
-                char loginPassword[128] = {0};
-                
-                C2D_TextBuf bufEmail = C2D_TextBufNew(sizeof(loginEmail));
-                C2D_TextBuf bufPassword = C2D_TextBufNew(sizeof(loginPassword)+1);
-
-                const char buttons[] = " Input Email\n  Input Password\n  Hold to reveal Password and Email\n  Login\n START Exit";
-                C2D_TextBuf bufLoginButtons = C2D_TextBufNew(sizeof(buttons));
-                C2D_Text txtLoginButtons;
-
-                C2D_TextParse(&txtLoginButtons, bufLoginButtons, buttons);
-                C2D_TextOptimize(&txtLoginButtons);
-                
-                while (loginState != LOGIN_STATE_ATTEMPT){
-                    hidScanInput();
-                    u32 kDown = hidKeysDown();
-                    u32 kHeld = hidKeysHeld();
-
-                    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-                    C2D_TargetClear(topScreen, C2D_Color32(0, 0, 0, 255));
-                    C2D_SceneBegin(topScreen);
-                    
-                    C2D_DrawText(&txtLoginButtons, C2D_AlignCenter | C2D_WithColor, 200.0f, 10.0f, 0.0f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
-
-                    if (kDown & KEY_X){
-                        SwkbdState swkbd;
-
-                        swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 1, -1);
-                        swkbdSetInitialText(&swkbd, loginEmail);
-                        swkbdSetHintText(&swkbd, "Input login email");
-                        swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "OK", true);
-                        swkbdSetFeatures(&swkbd, SWKBD_PREDICTIVE_INPUT);
-                        swkbdSetValidation(&swkbd, SWKBD_ANYTHING, 8, sizeof(loginEmail));
-                        swkbdInputText(&swkbd, loginEmail, sizeof(loginEmail));
-                    }
-                    if (kDown & KEY_B){
-                        SwkbdState swkbd;
-
-                        swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 1, -1);
-                        swkbdSetInitialText(&swkbd, loginPassword);
-                        swkbdSetHintText(&swkbd, "Input password");
-                        swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "OK", true);
-                        swkbdSetFeatures(&swkbd, SWKBD_PREDICTIVE_INPUT);
-                        swkbdSetValidation(&swkbd, SWKBD_ANYTHING, 8, sizeof(loginPassword));
-                        swkbdInputText(&swkbd, loginPassword, sizeof(loginPassword));
-                    }
-                    if (kHeld & KEY_Y){
-                        C2D_Text txtEmail;
-                        C2D_Text txtPassword;
-
-                        C2D_TextParse(&txtEmail, bufEmail, loginEmail);
-                        C2D_TextOptimize(&txtEmail);
-                        C2D_DrawText(&txtEmail, C2D_AlignCenter | C2D_WithColor, 200.0f, 100.0f, 0.0f, 0.4f, 0.4f, C2D_Color32(255, 255, 255, 255));
-                        C2D_TextBufClear(bufEmail);
-                        
-                        C2D_TextParse(&txtPassword, bufPassword, loginPassword);
-                        C2D_TextOptimize(&txtPassword);
-                        C2D_DrawText(&txtPassword, C2D_AlignCenter | C2D_WithColor, 200.0f, 120.0f, 0.0f, 0.4f, 0.4f, C2D_Color32(255, 255, 255, 255));
-                        C2D_TextBufClear(bufPassword);
-                    }
-                    if (kDown & KEY_A){
-
-                        loginState = LightquarkLogin(LOGIN_STATE_BLANK, loginEmail, loginPassword);
-                        if (bufLoginButtons) C2D_TextBufDelete(bufLoginButtons);
-                        if (bufEmail) C2D_TextBufDelete(bufEmail);
-                        if (bufPassword) C2D_TextBufDelete(bufPassword);
-                        break;
-                    }
-                    if (kDown & KEY_START) goto exit_redshift;
-                    C3D_FrameEnd(0);
-                }
-            case LOGIN_STATE_ATTEMPT:
-                loginState = LightquarkLogin(LOGIN_STATE_ATTEMPT, NULL, NULL);
-                break;
-            case LOGIN_STATE_REFRESH:
-                loginState = LightquarkLogin(LOGIN_STATE_REFRESH, NULL, NULL);
-                break;
-            case LOGIN_STATE_FAILED:
-                //epic fail
-                break;
-            case LOGIN_STATE_DONE:
-                //yay!
-                break;
+            if (LQLoginScreen(&loginState, joined_quarks, topScreen) == 1){
+                goto exit_redshift;
             }
         }
         
@@ -570,7 +334,7 @@ int main() {
 
         // --- Rendering and messsage handling things ---
 
-        //*
+        /*
         if (refresh_message_array_parsing == false && selected_channel_id[0] != '\0'){
             int start_index = (joined_quarks[selected_quark].channels[entered_selected_channel].message_index - joined_quarks[selected_quark].channels[entered_selected_channel].total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
             int second_index = (start_index + 1) % MAX_REND_MESSAGES;
