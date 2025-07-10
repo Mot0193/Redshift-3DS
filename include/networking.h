@@ -14,7 +14,8 @@ typedef enum LoginState {
     LOGIN_STATE_REFRESH,
     LOGIN_STATE_BLANK,
     LOGIN_STATE_DONE,
-    LOGIN_STATE_FAILED
+    LOGIN_STATE_FAILED,
+    LOGIN_STATE_EXIT
 } loginState;
 
 struct Quark;
@@ -41,6 +42,6 @@ void curl_PollRecv(CURL *curl, void *buffer, size_t buflen);
 
 char *GW_ReceiveFrame(CURL *curl);
 
-loginState LightquarkLogin(loginState loginState, char *email, char *password, struct Quark *joined_quarks);
+loginState LightquarkLogin(loginState loginState, char *email, char *password, struct Quark **joined_quarks);
 
 #endif

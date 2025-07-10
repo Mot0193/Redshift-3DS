@@ -139,6 +139,6 @@ void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int 
 
 // --- --- [ LOGIN SCREEN ] --- ---
 
-int LQLoginScreen(loginState *loginState, struct Quark *joined_quarks, C3D_RenderTarget *topScreen);
+void LQLoginScreen(loginState *loginState, struct Quark **joined_quarks, C3D_RenderTarget *topScreen);
 
 #endif

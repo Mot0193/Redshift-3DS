@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
@@ -540,7 +541,7 @@ char *GW_ReceiveFrame(CURL *curl){
 
 // --- [ Login Function ] ---
 
-loginState LightquarkLogin(loginState loginState, char *email, char *password, struct Quark *joined_quarks){
+loginState LightquarkLogin(loginState loginState, char *email, char *password, struct Quark **joined_quarks){
     printf("LoginState: %d\n", loginState);
     long httpcodecurl = 0;
 
@@ -573,7 +574,7 @@ loginState LightquarkLogin(loginState loginState, char *email, char *password, s
         }
         if (quarks_response == NULL) printf("Uh oh quarks response is null\n");
 
-        addQuarksToArray(&joined_quarks, quarks_response);
+        addQuarksToArray(joined_quarks, quarks_response);
         free(quarks_response);
 
         curl_GW_handle = curlUpgradeGateway(GATEWAY_URL); //upgrde to gateway (WebSocket)

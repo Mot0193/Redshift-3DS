@@ -50,6 +50,7 @@ volatile bool runThreads = false;
 void GW_reader_thread(void *ws_curl_handle)
 {
     printf("Reader Thread started!\n");
+    usleep(500 * 1000);
     uint16_t eventnumber = 0;
 	while (runThreads)
 	{
@@ -229,10 +230,10 @@ int main() {
             printf("Manual Blank Login requested\n");
             loginState = LOGIN_STATE_BLANK;
         }
-        while (loginState != LOGIN_STATE_DONE){ // --- LOGIN SCREEN --- 
-            if (LQLoginScreen(&loginState, joined_quarks, topScreen) == 1){
-                goto exit_redshift;
-            }
+        while (loginState != LOGIN_STATE_DONE){ // --- LOGIN SCREEN ---
+            LQLoginScreen(&loginState, &joined_quarks, topScreen);
+            printf("LOGIN_STATE: %i\n", loginState);
+            if (loginState == LOGIN_STATE_EXIT) goto exit_redshift;
         }
         
         if (!runThreads){

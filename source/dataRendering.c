@@ -452,7 +452,6 @@ void ParseTextMessages(struct Channel *channel_struct){
     // Treating the messages as dynamic text and parsing on each frame like the previous rendering function did sounds rather inneficient, so i plan on splitting the parsing and rendering functions.
     if (!channel_struct) return;
 
-
     //Im taking the opportunity to also split each message and username in its own text buffer and C2D object
     //Only create buffers if they DONT exist. We assume that if the 0th buffer exists, all of them have been created (which should obviously be true)
     if (!buftxt_messageContent[0] || !buftxt_messageUsername[0]){
@@ -660,7 +659,7 @@ void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int 
 
 // --- [ Login Screen ] ---
 
-int LQLoginScreen(loginState *loginState, struct Quark *joined_quarks, C3D_RenderTarget *topScreen) {
+void LQLoginScreen(loginState *loginState, struct Quark **joined_quarks, C3D_RenderTarget *topScreen) {
   switch (*loginState) {
     case LOGIN_STATE_BLANK:
       char loginEmail[128] = {0};
@@ -731,11 +730,12 @@ int LQLoginScreen(loginState *loginState, struct Quark *joined_quarks, C3D_Rende
           break;
         }
         if (kDown & KEY_START) {
+            *loginState = LOGIN_STATE_EXIT;
             if (bufLoginButtons) C2D_TextBufDelete(bufLoginButtons);
             if (bufEmail) C2D_TextBufDelete(bufEmail);
             if (bufPassword) C2D_TextBufDelete(bufPassword);
             C3D_FrameEnd(0);
-            return 1;
+            break;
         }
         C3D_FrameEnd(0);
       }
@@ -745,13 +745,11 @@ int LQLoginScreen(loginState *loginState, struct Quark *joined_quarks, C3D_Rende
     case LOGIN_STATE_REFRESH:
       *loginState = LightquarkLogin(LOGIN_STATE_REFRESH, NULL, NULL, joined_quarks);
       break;
-    case LOGIN_STATE_FAILED:
-      printf("Login Failed :(\n");
-      return -1;
-      break;
     case LOGIN_STATE_DONE:
       printf("Login Successful! :)\n");
       break;
+    default:
+      printf("Login Failed :(\n");
+      break;
     }
-    return 0;
 }
