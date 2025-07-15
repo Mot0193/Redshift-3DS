@@ -50,7 +50,6 @@ volatile bool runThreads = false;
 void GW_reader_thread(void *ws_curl_handle)
 {
     printf("Reader Thread started!\n");
-    usleep(500 * 1000);
     uint16_t eventnumber = 0;
 	while (runThreads)
 	{
@@ -194,7 +193,6 @@ int main() {
     gfxInitDefault();
     consoleInit(GFX_BOTTOM, NULL);
     printf("Console Initialized!\n");
-    usleep(500 * 1000);
 
     initSocketService();
 	atexit(socShutdown);
@@ -273,24 +271,45 @@ int main() {
             }
         }
 
-        if (kDown & KEY_A){ 
+        if (kDown & KEY_A){
+            for (int i = 0; i < joined_quarks[selected_quark].channels[entered_selected_channel].total_messages; ++i){
+                int start_index = (joined_quarks[selected_quark].channels[entered_selected_channel].message_index - joined_quarks[selected_quark].channels[entered_selected_channel].total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES; //the oldest message
+                int msg_index = (start_index + i) % MAX_REND_MESSAGES;
+                printf("Message %i start: %f\n", i, joined_quarks[selected_quark].channels[entered_selected_channel].messages[msg_index].content_message_start);
+            }
         }
         if (kDown & KEY_B){
         }
         if (kDown & KEY_Y){
         }
 
-        if (abs(CPadPos.dy) >= 15){
+        if (abs(CPadPos.dy) >= 15){ // Message Scrolling
             struct Channel *channel = &joined_quarks[selected_quark].channels[entered_selected_channel];
             if (channel->total_message_height > 0){
                 scroll_offset += (CPadPos.dy / 20.0f);
                 if (scroll_offset < 0.0f) scroll_offset = 0.0f;
-                int start_index = (channel->message_index - channel->total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
+                int start_index = (channel->message_index - channel->total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES; //the oldest message
 
-                float max_scroll = channel->total_message_height - channel->messages[start_index].content_message_start;
+                float max_scroll = channel->total_message_height - channel->messages[start_index].content_totalpadding_height;
                 if (scroll_offset > max_scroll) scroll_offset = max_scroll;
 
-                //printf("\x1b[1;1HScrollOffset: %f", scroll_offset);
+                static int selection_index = -1;
+                for (int i = 0; i <= channel->total_messages; ++i) {
+                    int msg_index = (start_index + i + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
+                    float start = channel->messages[msg_index].content_message_start;
+                    float end = start - channel->messages[msg_index].content_totalpadding_height;
+
+                    if (scroll_offset <= start && scroll_offset >= end) {
+                        printf("Start: %f\n", start);
+                        printf("End: %f\n", end);
+                        selection_index = msg_index;
+                    }
+                }
+
+                if (selection_index != -1) {
+                    printf("Selected message index: %d\n", selection_index);
+                }
+                printf("ScrollOffset: %f\n", scroll_offset);
             }
         }
 

@@ -77,10 +77,9 @@ struct MessageStructure {
 
     char channelId[LQ_IDLENGTH];
 
-    int content_line_number; // probably not useful anymore. This was used for old rendering to figure out how much space multiline messages use.
-    float content_c2d_height; // the total height in pixels of the entire message (multiline or not). See ParseTextMessages
-    float content_message_start; // the pixel number where each message starts (basically the top of the message "block", including the username). Used for the auto message selection scrolling thing
-
+    float content_c2d_height; // the total height in pixels of the individual message text (multiline or not, including username). See ParseTextMessages. WITHOUT padding
+    float content_totalpadding_height; // total height in pixels of the individual message including padding // I wonder if this is kinda uneccessary since i could try calculating the padding with the above variable
+    float content_message_start; // the pixel number where each message starts. Basically the top of the message "block", including the username and padding (i think), relative to 0 (the bottom of the screen). Used for the auto message selection scrolling thing to figure out if a message is in view or not
     float username_c2d_height; // the height of the username. It should be only 1 line long, which means this is also the "default single character/line height for text that uses the same size and font as usernames and messages". Try having this as the variable name
 
     bool same_username_as_last; // if true, the username of this message is the same as the last message. Used to skip drawing the username if thats the case. Quarky developer(s?) might recognize this as isContinuation, though we can agree my variable names are superior

@@ -165,98 +165,6 @@ char *WrappedMessage(const char *message){ //i give up, Mr GeePeeTee wrote this 
     return result;
 }
 
-int countLines(const char *wrappedMessage) {
-    int lines = 0;
-    for (int i = 0; wrappedMessage[i] != '\0'; i++) {
-        if (wrappedMessage[i] == '\n') {
-            lines++; // Count each newline character as the end of a line
-        }
-    }
-    return lines+1; //+1 because the message will always have at least one line
-}
-
-void freeHELPMessageArrayAtIndex(struct MessageStructure *messages, int index) {
-    // slowly prints each time it frees something, used for debugging, i will get rid of this eventually   
-    // im so good at debugging
-    if (!messages) {
-        return;
-    }
-
-    printf("Free Content\n");
-    usleep(500 * 1000);
-    free(messages[index].content);
-    messages[index].content = NULL;
-
-    printf("Free ua\n");
-    usleep(500 * 1000);
-    free(messages[index].ua);
-    messages[index].ua = NULL;
-
-    printf("Free username\n");
-    usleep(500 * 1000);
-    free(messages[index].username);
-    messages[index].username = NULL;
-
-    printf("Free avatarUri\n");
-    usleep(500 * 1000);
-    free(messages[index].avatarUri);
-    messages[index].avatarUri = NULL;
-
-    for (int i = 0; i < messages[index].attachment_count; i++) {
-
-        printf("Free attachments[%i].url\n", i);
-        usleep(500 * 1000);
-        free(messages[index].attachments[i].url);
-        messages[index].attachments[i].url = NULL;
-
-        printf("Free attachments[%i].type\n", i);
-        usleep(500 * 1000);
-        free(messages[index].attachments[i].type);
-        messages[index].attachments[i].type = NULL;
-
-        printf("Free attachments[%i].filename\n", i);
-        usleep(500 * 1000);
-        free(messages[index].attachments[i].filename);
-        messages[index].attachments[i].filename = NULL;
-
-    }
-
-    printf("Free attachments\n");
-    usleep(500 * 1000);
-    free(messages[index].attachments);
-    messages[index].attachments = NULL;
-
-    
-
-    for (int i = 0; i < messages[index].specialAttribute_count; i++) {
-
-        printf("Free specialAttributes[%i].type\n", i);
-        usleep(500 * 1000);
-        free(messages[index].specialAttributes[i].type);
-        messages[index].specialAttributes[i].type = NULL;
-
-        printf("Free specialAttributes[%i].username\n", i);
-        usleep(500 * 1000);
-        free(messages[index].specialAttributes[i].username);
-        messages[index].specialAttributes[i].username = NULL;
-
-        printf("Free specialAttributes[%i].avatarUri\n", i);
-        usleep(500 * 1000);
-        free(messages[index].specialAttributes[i].avatarUri);
-        messages[index].specialAttributes[i].avatarUri = NULL;
-
-        printf("Free specialAttributes[%i].plaintext\n", i);
-        usleep(500 * 1000);
-        free(messages[index].specialAttributes[i].plaintext);
-        messages[index].specialAttributes[i].plaintext = NULL;
-    }
-
-    printf("Free specialAttributes\n");
-    usleep(500 * 1000);
-    free(messages[index].specialAttributes);
-    messages[index].specialAttributes = NULL;
-}
-
 void freeMessageArrayAtIndex(struct MessageStructure *messages, int index) {
     if (!messages) {
         return;
@@ -367,7 +275,6 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
     channel_struct->messages[message_index].avatarUri = strdup(avatarUri->valuestring);
 
     snprintf(channel_struct->messages[message_index].channelId, sizeof(channel_struct->messages[message_index].channelId), "%s", channelId->valuestring);
-    channel_struct->messages[message_index].content_line_number = countLines(wrappedContent);
 
     
     // Attachments ----
@@ -547,11 +454,13 @@ void ParseTextMessages(struct Channel *channel_struct){
             this_message_height += channel_struct->messages[message_arr_index].username_c2d_height / 6;
         }
 
-        channel_struct->messages[message_arr_index].content_message_start = this_message_height;
+        channel_struct->messages[message_arr_index].content_totalpadding_height = this_message_height;
 
         channel_struct->total_message_height += this_message_height;
 
-        //printf("Message %i height: %f\n", i, channel_struct->total_message_height);
+        channel_struct->messages[message_arr_index].content_message_start = channel_struct->total_message_height;
+
+        //printf("Message %i height: %f\n", i, channel_struct->messages[message_arr_index].content_message_start);
     }
     //printf("Total message height: %f\n", channel_struct->total_message_height);
 }
