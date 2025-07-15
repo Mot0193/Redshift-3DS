@@ -285,7 +285,8 @@ int main() {
         if (kDown & KEY_Y){
         }
 
-        if (abs(CPadPos.dy) >= 15){ // Message Scrolling
+        // Message Scrolling
+        if (abs(CPadPos.dy) >= 15){ 
             struct Channel *channel = &joined_quarks[selected_quark].channels[entered_selected_channel];
             if (channel->total_message_height > 0){
                 scroll_offset += (CPadPos.dy / 20.0f);
@@ -312,6 +313,14 @@ int main() {
                 }
                 printf("ScrollOffset: %f\n", scroll_offset);
             }
+        }
+
+        // Message selection nudging
+        if (kDown & KEY_ZL){
+            selected_message = (selected_message + 1 + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
+        }
+        if (kDown & KEY_ZR){
+            selected_message = (selected_message - 1 + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
         }
 
         
