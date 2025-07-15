@@ -36,6 +36,8 @@ size_t selected_channel = 0;
 size_t entered_selected_channel = 0;
 bool channel_select = false;
 
+int selected_message = -1;
+
 static bool refresh_message_array_parsing = false;
 
 float scroll_offset = 0;
@@ -293,7 +295,6 @@ int main() {
                 float max_scroll = channel->total_message_height - channel->messages[start_index].content_totalpadding_height;
                 if (scroll_offset > max_scroll) scroll_offset = max_scroll;
 
-                static int selection_index = -1;
                 for (int i = 0; i <= channel->total_messages; ++i) {
                     int msg_index = (start_index + i + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
                     float start = channel->messages[msg_index].content_message_start;
@@ -302,12 +303,12 @@ int main() {
                     if (scroll_offset <= start && scroll_offset >= end) {
                         printf("Start: %f\n", start);
                         printf("End: %f\n", end);
-                        selection_index = msg_index;
+                        selected_message = msg_index;
                     }
                 }
 
-                if (selection_index != -1) {
-                    printf("Selected message index: %d\n", selection_index);
+                if (selected_message != -1) {
+                    printf("Selected message index: %d\n", selected_message);
                 }
                 printf("ScrollOffset: %f\n", scroll_offset);
             }
@@ -410,7 +411,7 @@ int main() {
         C2D_SceneBegin(topScreen);
 
         LightLock_Lock(&MessageWriterLock);
-        DrawTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel], scroll_offset);
+        DrawTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel], scroll_offset, selected_message);
         LightLock_Unlock(&MessageWriterLock);
 
         //*/

@@ -130,7 +130,7 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
 
 void ParseTextMessages(struct Channel *channel_struct);
 
-void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset);
+void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset, int selected_message);
     
 void Buf_C2D_Cleanup();
 

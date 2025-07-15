@@ -465,7 +465,7 @@ void ParseTextMessages(struct Channel *channel_struct){
     //printf("Total message height: %f\n", channel_struct->total_message_height);
 }
 
-void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset){
+void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset, int selected_message){
     if (!channel_struct) return;
 
     int start_index = (channel_struct->message_index - channel_struct->total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
@@ -473,15 +473,19 @@ void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset){
     for (int i = MAX_REND_MESSAGES-1; i >= 0; i--){
         int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
         if (channel_struct->messages[message_arr_index].content == NULL) continue;
+        u32 content_color = C2D_Color32(255, 0, 0, 255);
+        if (selected_message == message_arr_index) content_color = C2D_Color32(255, 150, 150, 255);
+        u32 username_color = C2D_Color32(255, 255, 255, 255);
+        if (selected_message == message_arr_index) username_color = C2D_Color32(200, 255, 255, 225);
         
         y -= channel_struct->messages[message_arr_index].content_c2d_height + ((channel_struct->messages[message_arr_index].attachment_count >= 1) ? channel_struct->messages[message_arr_index].username_c2d_height : 0); // if theres attachments leave space for the [attachment] indicator. TODO: actually render the indicator
-        C2D_DrawText(&txt_messageContent[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, C2D_Color32(255, 0, 0, 255));
+        C2D_DrawText(&txt_messageContent[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, content_color);
         
         if (channel_struct->messages[message_arr_index].same_username_as_last){
             y -= channel_struct->messages[message_arr_index].username_c2d_height / 6;
         } else {
             y -= channel_struct->messages[message_arr_index].username_c2d_height;
-            C2D_DrawText(&txt_messageUsername[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, C2D_Color32(255, 255, 255, 255));
+            C2D_DrawText(&txt_messageUsername[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, username_color);
             y -= channel_struct->messages[message_arr_index].username_c2d_height / 4; // add some padding in between messages
         }
     }
