@@ -37,6 +37,7 @@ size_t entered_selected_channel = 0;
 bool channel_select = false;
 
 int selected_message = -1;
+char selected_message_id[LQ_IDLENGTH];
 
 static bool refresh_message_array_parsing = false;
 
@@ -171,7 +172,6 @@ void messageSender_thread(void *arg){
         const char *channelid = threadsenddata.selectedchannelid;
         char *message = threadsenddata.sendingmessage_buffer;
         const char *replyto = threadsenddata.replyto;
-
         if (message != NULL) {
             messageSend_httpcode = lqSendmessage(accesstoken, channelid, message, replyto);
             if (messageSend_httpcode != 201) {
@@ -181,6 +181,7 @@ void messageSender_thread(void *arg){
             }
             free(message);
             threadsenddata.sendingmessage_buffer = NULL;
+            selected_message_id[0] = '\0';
         }
 	}
 }
@@ -193,7 +194,7 @@ bool touchingArea(touchPosition touch, touchPosition target1, touchPosition targ
 
 int main() {
     gfxInitDefault();
-    consoleInit(GFX_BOTTOM, NULL);
+    //consoleInit(GFX_BOTTOM, NULL);
     printf("Console Initialized!\n");
 
     initSocketService();
@@ -268,7 +269,9 @@ int main() {
                 threadsenddata.accesstoken = accesstoken;
                 threadsenddata.selectedchannelid = selected_channel_id;
                 threadsenddata.sendingmessage_buffer = strdup(sendingmessage_buffer);
-                //threadsenddata.replyto = NULL;
+                if (selected_message_id[0] != '\0'){
+                    threadsenddata.replyto = selected_message_id;
+                } else threadsenddata.replyto = NULL;
                 svcSignalEvent(threadMessageSendRequest);
             }
         }
@@ -281,6 +284,9 @@ int main() {
             }
         }
         if (kDown & KEY_B){
+        }
+        if (kDown & KEY_X){
+            if (selected_message >= 0) strcpy(selected_message_id, joined_quarks[selected_quark].channels[entered_selected_channel].messages[selected_message].message_id);
         }
         if (kDown & KEY_Y){
         }
@@ -302,16 +308,9 @@ int main() {
                     float end = start - channel->messages[msg_index].content_totalpadding_height;
 
                     if (scroll_offset <= start && scroll_offset >= end) {
-                        printf("Start: %f\n", start);
-                        printf("End: %f\n", end);
                         selected_message = msg_index;
                     }
                 }
-
-                if (selected_message != -1) {
-                    printf("Selected message index: %d\n", selected_message);
-                }
-                printf("ScrollOffset: %f\n", scroll_offset);
             }
         }
 
@@ -345,6 +344,8 @@ int main() {
                 refresh_message_array_parsing = true;
                 rendering_old_messages = false;
                 scroll_offset = 0;
+                selected_message = -1;
+                selected_message_id[0] = '\0';
             } else {
                 channel_select = true;
             }
@@ -425,9 +426,9 @@ int main() {
 
         //*/
 
-        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+        //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
-        /*
+        //*
         C2D_TargetClear(botScreen, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(botScreen);
         DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
