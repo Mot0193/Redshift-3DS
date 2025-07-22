@@ -474,9 +474,9 @@ void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset, in
         int message_arr_index = (start_index + i) % MAX_REND_MESSAGES;
         if (channel_struct->messages[message_arr_index].content == NULL) continue;
         u32 content_color = C2D_Color32(255, 0, 0, 255);
-        if (selected_message == message_arr_index) content_color = C2D_Color32(255, 150, 150, 255);
+        if (selected_message == message_arr_index) content_color = C2D_Color32(255, 0, 0, 127);
         u32 username_color = C2D_Color32(255, 255, 255, 255);
-        if (selected_message == message_arr_index) username_color = C2D_Color32(200, 255, 255, 225);
+        if (selected_message == message_arr_index) username_color = C2D_Color32(255, 255, 255, 127);
         
         y -= channel_struct->messages[message_arr_index].content_c2d_height + ((channel_struct->messages[message_arr_index].attachment_count >= 1) ? channel_struct->messages[message_arr_index].username_c2d_height : 0); // if theres attachments leave space for the [attachment] indicator. TODO: actually render the indicator
         C2D_DrawText(&txt_messageContent[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, content_color);

@@ -194,7 +194,7 @@ bool touchingArea(touchPosition touch, touchPosition target1, touchPosition targ
 
 int main() {
     gfxInitDefault();
-    //consoleInit(GFX_BOTTOM, NULL);
+    consoleInit(GFX_BOTTOM, NULL);
     printf("Console Initialized!\n");
 
     initSocketService();
@@ -426,9 +426,9 @@ int main() {
 
         //*/
 
-        //DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
+        DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
 
-        //*
+        /*
         C2D_TargetClear(botScreen, C2D_Color32(0, 0, 0, 255));
         C2D_SceneBegin(botScreen);
         DrawStructuredQuarks(joined_quarks, channel_select, selected_quark, selected_channel, entered_selected_channel);
