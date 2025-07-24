@@ -9,12 +9,10 @@
 #include "dataRendering.h"
 
 // Text buffers
-C2D_TextBuf buftxt_messageContent[MAX_REND_MESSAGES], buftxt_messageUsername[MAX_REND_MESSAGES];
-C2D_TextBuf text_contentBuf, text_usernameBuf; 
+C2D_TextBuf buftxt_messageContent[MAX_REND_MESSAGES], buftxt_messageUsername[MAX_REND_MESSAGES], buftxt_attachments[MAX_REND_MESSAGES];
 
 // Text objects
-C2D_Text contentText, usernameText;
-C2D_Text txt_messageContent[MAX_REND_MESSAGES], txt_messageUsername[MAX_REND_MESSAGES];
+C2D_Text txt_messageContent[MAX_REND_MESSAGES], txt_messageUsername[MAX_REND_MESSAGES], txt_attachments[MAX_REND_MESSAGES];
 
 extern LightLock MessageWriterLock;
 
@@ -431,6 +429,35 @@ void ParseTextMessages(struct Channel *channel_struct){
             C2D_TextGetDimensions(&txt_messageContent[i], MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, NULL, &channel_struct->messages[message_arr_index].content_c2d_height);
             //printf("Content Height: %f\n", channel_struct->messages[message_arr_index].content_c2d_height);
             //saves the message height so i dont have to run getdimensions on every frame later. This is used to properly position multiline messages
+
+            // Create buffers and parse for "attachment" indicators
+            if (channel_struct->messages[message_arr_index].attachment_count > 1){
+                if (!buftxt_attachments[i]) buftxt_attachments[i] = C2D_TextBufNew(24);
+                char attachment_text[24];
+                snprintf(attachment_text, sizeof(attachment_text), "[%i attachments]", channel_struct->messages[message_arr_index].attachment_count);
+
+                C2D_TextBufClear(buftxt_attachments[i]);
+                // i should probably just check if the buffer is already big enough... Im resizing here because if the buffer has previously held a single file name thats shorter than 24 glypth, the [attachments] text would be cut off. 
+                // Unsure if C2D_TextBufGetNumGlyphs returns the buffer _size_ OR how many characters/glypths it has from previously parsed text.. well either way it would be useful, but for now im lazy so im doing this.
+                C2D_TextBuf resizedAttachmentBuf = C2D_TextBufResize(buftxt_attachments[i], 24);
+                buftxt_attachments[i] = resizedAttachmentBuf;
+
+                C2D_TextParse(&txt_attachments[i], buftxt_attachments[i], attachment_text);
+                C2D_TextOptimize(&txt_attachments[i]);
+                printf("Multiple attachment text: %s\n", attachment_text);
+            } else if (channel_struct->messages[message_arr_index].attachment_count == 1){
+                if (!buftxt_attachments[i]) buftxt_attachments[i] = C2D_TextBufNew(strlen(channel_struct->messages[message_arr_index].attachments[0].filename));
+                else {
+                    C2D_TextBufClear(buftxt_attachments[i]);
+                    C2D_TextBuf resizedAttachmentBuf = C2D_TextBufResize(buftxt_attachments[i], strlen(channel_struct->messages[message_arr_index].attachments[0].filename)*1.2+1);
+                    buftxt_attachments[i] = resizedAttachmentBuf;
+                }
+                char attachment_text[strlen(channel_struct->messages[message_arr_index].attachments[0].filename) + 4];
+                snprintf(attachment_text, sizeof(attachment_text), "[%s]", channel_struct->messages[message_arr_index].attachments[0].filename);
+                C2D_TextParse(&txt_attachments[i], buftxt_attachments[i], channel_struct->messages[message_arr_index].attachments[0].filename);
+                C2D_TextOptimize(&txt_attachments[i]);
+                printf("Single attachment text: %s\n", channel_struct->messages[message_arr_index].attachments[0].filename);
+            } 
         }
     }
 
@@ -477,9 +504,18 @@ void DrawTextMessages(struct Channel *channel_struct, float scrolling_offset, in
         if (selected_message == message_arr_index) content_color = C2D_Color32(255, 0, 0, 127);
         u32 username_color = C2D_Color32(255, 255, 255, 255);
         if (selected_message == message_arr_index) username_color = C2D_Color32(255, 255, 255, 127);
-        
-        y -= channel_struct->messages[message_arr_index].content_c2d_height + ((channel_struct->messages[message_arr_index].attachment_count >= 1) ? channel_struct->messages[message_arr_index].username_c2d_height : 0); // if theres attachments leave space for the [attachment] indicator. TODO: actually render the indicator
-        C2D_DrawText(&txt_messageContent[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, content_color);
+        u32 attachment_color = C2D_Color32(255, 0, 255, 255);
+        if (selected_message == message_arr_index) attachment_color = C2D_Color32(255, 0, 255, 127);
+
+        if (channel_struct->messages[message_arr_index].attachment_count > 0){
+            y -= channel_struct->messages[message_arr_index].username_c2d_height;
+            C2D_DrawText(&txt_attachments[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, attachment_color);
+        }
+
+        if (channel_struct->messages[message_arr_index].content[0] != '\0'){
+            y -= channel_struct->messages[message_arr_index].content_c2d_height;
+            C2D_DrawText(&txt_messageContent[i], C2D_WithColor, 0.0f, y, 0.0f, MESSAGE_USERNAME_TEXT_SIZE, MESSAGE_USERNAME_TEXT_SIZE, content_color);
+        }
         
         if (channel_struct->messages[message_arr_index].same_username_as_last){
             y -= channel_struct->messages[message_arr_index].username_c2d_height / 6;
@@ -496,6 +532,7 @@ void Buf_C2D_Cleanup(){
     for (int i = 0; i < MAX_REND_MESSAGES; i++){
         if (buftxt_messageContent[i])  C2D_TextBufDelete(buftxt_messageContent[i]);
         if (buftxt_messageUsername[i]) C2D_TextBufDelete(buftxt_messageUsername[i]);
+        if (buftxt_attachments[i]) C2D_TextBufDelete(buftxt_attachments[i]);
     }
 }
 
