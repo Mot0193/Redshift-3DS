@@ -446,15 +446,16 @@ void ParseTextMessages(struct Channel *channel_struct){
                 C2D_TextOptimize(&txt_attachments[i]);
                 printf("Multiple attachment text: %s\n", attachment_text);
             } else if (channel_struct->messages[message_arr_index].attachment_count == 1){
-                if (!buftxt_attachments[i]) buftxt_attachments[i] = C2D_TextBufNew(strlen(channel_struct->messages[message_arr_index].attachments[0].filename));
-                else {
+                if (!buftxt_attachments[i]){
+                    buftxt_attachments[i] = C2D_TextBufNew(strlen(channel_struct->messages[message_arr_index].attachments[0].filename));
+                } else {
                     C2D_TextBufClear(buftxt_attachments[i]);
                     C2D_TextBuf resizedAttachmentBuf = C2D_TextBufResize(buftxt_attachments[i], strlen(channel_struct->messages[message_arr_index].attachments[0].filename)*1.2+1);
                     buftxt_attachments[i] = resizedAttachmentBuf;
                 }
                 char attachment_text[strlen(channel_struct->messages[message_arr_index].attachments[0].filename) + 4];
                 snprintf(attachment_text, sizeof(attachment_text), "[%s]", channel_struct->messages[message_arr_index].attachments[0].filename);
-                C2D_TextParse(&txt_attachments[i], buftxt_attachments[i], channel_struct->messages[message_arr_index].attachments[0].filename);
+                C2D_TextParse(&txt_attachments[i], buftxt_attachments[i], attachment_text);
                 C2D_TextOptimize(&txt_attachments[i]);
                 printf("Single attachment text: %s\n", channel_struct->messages[message_arr_index].attachments[0].filename);
             } 

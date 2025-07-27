@@ -33,7 +33,7 @@ extern size_t total_quarks_name_size;
 
 size_t selected_quark = 0;
 size_t selected_channel = 0;
-size_t entered_selected_channel = 0;
+int entered_selected_channel = -1;
 bool channel_select = false;
 
 int selected_message = -1;
@@ -42,7 +42,6 @@ char selected_message_id[LQ_IDLENGTH];
 static bool refresh_message_array_parsing = false;
 
 float scroll_offset = 0;
-float rendering_old_messages = false;
 
 LightLock MessageWriterLock;
 LightLock CurlGatewayLock;
@@ -286,13 +285,13 @@ int main() {
         if (kDown & KEY_B){
         }
         if (kDown & KEY_X){
-            if (selected_message >= 0) strcpy(selected_message_id, joined_quarks[selected_quark].channels[entered_selected_channel].messages[selected_message].message_id);
+            if (selected_message > -1) strcpy(selected_message_id, joined_quarks[selected_quark].channels[entered_selected_channel].messages[selected_message].message_id);
         }
         if (kDown & KEY_Y){
         }
 
         // Message Scrolling
-        if (abs(CPadPos.dy) >= 15){ 
+        if (abs(CPadPos.dy) >= 15 && entered_selected_channel >= 0){ 
             struct Channel *channel = &joined_quarks[selected_quark].channels[entered_selected_channel];
             if (channel->total_message_height > 0){
                 scroll_offset += (CPadPos.dy / 20.0f);
@@ -340,72 +339,33 @@ int main() {
         }
         if (kDown & KEY_DRIGHT){
             if (channel_select){
+                // if user is in channel select mode, which means they just selected a channel to be "entered"
                 entered_selected_channel = selected_channel;
-                refresh_message_array_parsing = true;
-                rendering_old_messages = false;
-                scroll_offset = 0;
-                selected_message = -1;
-                selected_message_id[0] = '\0';
+                if (joined_quarks[selected_quark].channels_count > 0){
+                    // get recent messages in selected channel if the quark has channels
+                    strcpy(selected_channel_id, joined_quarks[selected_quark].channels[entered_selected_channel].channel_id);
+                    char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, MAX_REND_MESSAGES);
+                    GW_SendFrame(curl_GW_handle, getmessagerequest);
+                    free(getmessagerequest); 
+                }
+                refresh_message_array_parsing = true; // tells the message rendering to parse the new messages below
+                scroll_offset = 0; // reset scrolling
+                selected_message = -1; // un-select a selected message if one has been selected previously
+                selected_message_id[0] = '\0'; // clear selected message id
             } else {
+                // the user is NOT selecting a channel, so they just selected a quark instead
                 channel_select = true;
-            }
-            if (joined_quarks[selected_quark].channels_count>0){
-                strcpy(selected_channel_id, joined_quarks[selected_quark].channels[entered_selected_channel].channel_id);
-                // get recent messages in selected channel
-                char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, MAX_REND_MESSAGES);
-                GW_SendFrame(curl_GW_handle, getmessagerequest);
-                free(getmessagerequest); 
+                entered_selected_channel = -1;
             }
         }
         if (kDown & KEY_DLEFT){
+            // this exits "channel select" mode returning to quark select mode
             channel_select = false;
             selected_channel = 0;
-            entered_selected_channel = 0; 
+            entered_selected_channel = -1;
         }
 
         // --- Rendering and messsage handling things ---
-
-        /*
-        if (refresh_message_array_parsing == false && selected_channel_id[0] != '\0'){
-            int start_index = (joined_quarks[selected_quark].channels[entered_selected_channel].message_index - joined_quarks[selected_quark].channels[entered_selected_channel].total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
-            int second_index = (start_index + 1) % MAX_REND_MESSAGES;
-            float max_scroll = joined_quarks[selected_quark].channels[entered_selected_channel].total_message_height - joined_quarks[selected_quark].channels[entered_selected_channel].messages[start_index].content_message_start;
-            if (max_scroll == 0) max_scroll = 999999; //nah i dont beleive you
-            if (scroll_offset >= max_scroll){
-                printf("Getting older messages...\n");
-                // when we scroll to the top...
-                // get older messages (including the last message of the 1st list for visual continuity reasons. We achive this by using messages[second_last_index].timestamp, beacuse timestamp api call is exclusive or soemthing)
-                
-                char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, &joined_quarks[selected_quark].channels[entered_selected_channel].messages[second_index].timestamp, NULL, MAX_REND_MESSAGES);
-                GW_SendFrame(curl_GW_handle, getmessagerequest);
-                free(getmessagerequest); 
-            
-                rendering_old_messages = true;
-                //refresh_message_array_parsing = true;
-                LightLock_Lock(&MessageWriterLock);
-                ParseTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel]);
-                LightLock_Unlock(&MessageWriterLock);
-
-                scroll_offset = 1; //trolley
-            }
-        }
-
-        if (rendering_old_messages == true && scroll_offset <= 0 && refresh_message_array_parsing == false){
-            // get the most recent messages in selected channel
-            char *getmessagerequest = GW_LQAssembleGetMessages(accesstoken, selected_channel_id, NULL, NULL, MAX_REND_MESSAGES);
-            GW_SendFrame(curl_GW_handle, getmessagerequest);
-            free(getmessagerequest);
-
-            rendering_old_messages = false;
-            LightLock_Lock(&MessageWriterLock);
-            ParseTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel]);
-            LightLock_Unlock(&MessageWriterLock);
-            //refresh_message_array_parsing = true;
-
-            int start_index = (joined_quarks[selected_quark].channels[entered_selected_channel].message_index - joined_quarks[selected_quark].channels[entered_selected_channel].total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES;
-            scroll_offset = joined_quarks[selected_quark].channels[entered_selected_channel].total_message_height - joined_quarks[selected_quark].channels[entered_selected_channel].messages[start_index].content_message_start - 1;
-        }
-        //*/
 
         if (refresh_message_array_parsing == true){
             LightLock_Lock(&MessageWriterLock);
@@ -421,7 +381,7 @@ int main() {
         C2D_SceneBegin(topScreen);
 
         LightLock_Lock(&MessageWriterLock);
-        DrawTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel], scroll_offset, selected_message);
+        if (entered_selected_channel > -1) DrawTextMessages(&joined_quarks[selected_quark].channels[entered_selected_channel], scroll_offset, selected_message);
         LightLock_Unlock(&MessageWriterLock);
 
         //*/
