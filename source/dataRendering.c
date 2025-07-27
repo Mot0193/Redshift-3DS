@@ -432,29 +432,22 @@ void ParseTextMessages(struct Channel *channel_struct){
 
             // Create buffers and parse for "attachment" indicators
             if (channel_struct->messages[message_arr_index].attachment_count > 1){
-                if (!buftxt_attachments[i]) buftxt_attachments[i] = C2D_TextBufNew(24);
+                if (!buftxt_attachments[i]) buftxt_attachments[i] = C2D_TextBufNew(MAX_CHAR_PER_MESSAGE_LINE);
+                
                 char attachment_text[24];
                 snprintf(attachment_text, sizeof(attachment_text), "[%i attachments]", channel_struct->messages[message_arr_index].attachment_count);
 
                 C2D_TextBufClear(buftxt_attachments[i]);
-                // i should probably just check if the buffer is already big enough... Im resizing here because if the buffer has previously held a single file name thats shorter than 24 glypth, the [attachments] text would be cut off. 
-                // Unsure if C2D_TextBufGetNumGlyphs returns the buffer _size_ OR how many characters/glypths it has from previously parsed text.. well either way it would be useful, but for now im lazy so im doing this.
-                C2D_TextBuf resizedAttachmentBuf = C2D_TextBufResize(buftxt_attachments[i], 24);
-                buftxt_attachments[i] = resizedAttachmentBuf;
-
                 C2D_TextParse(&txt_attachments[i], buftxt_attachments[i], attachment_text);
                 C2D_TextOptimize(&txt_attachments[i]);
                 printf("Multiple attachment text: %s\n", attachment_text);
             } else if (channel_struct->messages[message_arr_index].attachment_count == 1){
-                if (!buftxt_attachments[i]){
-                    buftxt_attachments[i] = C2D_TextBufNew(strlen(channel_struct->messages[message_arr_index].attachments[0].filename));
-                } else {
-                    C2D_TextBufClear(buftxt_attachments[i]);
-                    C2D_TextBuf resizedAttachmentBuf = C2D_TextBufResize(buftxt_attachments[i], strlen(channel_struct->messages[message_arr_index].attachments[0].filename)*1.2+1);
-                    buftxt_attachments[i] = resizedAttachmentBuf;
-                }
-                char attachment_text[strlen(channel_struct->messages[message_arr_index].attachments[0].filename) + 4];
+                if (!buftxt_attachments[i]) buftxt_attachments[i] = C2D_TextBufNew(MAX_CHAR_PER_MESSAGE_LINE);
+
+                char attachment_text[MAX_CHAR_PER_MESSAGE_LINE];           
                 snprintf(attachment_text, sizeof(attachment_text), "[%s]", channel_struct->messages[message_arr_index].attachments[0].filename);
+
+                C2D_TextBufClear(buftxt_attachments[i]);
                 C2D_TextParse(&txt_attachments[i], buftxt_attachments[i], attachment_text);
                 C2D_TextOptimize(&txt_attachments[i]);
                 printf("Single attachment text: %s\n", channel_struct->messages[message_arr_index].attachments[0].filename);
