@@ -231,6 +231,7 @@ CURL *curlUpgradeGateway(char *gateway_url){
     if (res != CURLE_OK) {
         printf("Error when upgrading to socket: %s\n", curl_easy_strerror(res));
         curl_easy_cleanup(curl);
+        free(url_copy); // why am i making a copy of the url??? whatever
         return NULL;
     }
 
@@ -238,6 +239,7 @@ CURL *curlUpgradeGateway(char *gateway_url){
     if (res != CURLE_OK || sockfd < 0) {
         printf("Failed to retrieve active socket!\n");
         curl_easy_cleanup(curl);
+        free(url_copy);
         return NULL;
     }
 
@@ -251,8 +253,8 @@ CURL *curlUpgradeGateway(char *gateway_url){
         "Sec-WebSocket-Version: 13\r\n"
         "\r\n",
         host_url);
-
-
+    
+    free(url_copy); // why am i making a copy of the url??? whatever
     size_t nsent;    
     res = curl_easy_send(curl, upgrade_request, strlen(upgrade_request), &nsent);
     if (res != CURLE_OK || nsent != strlen(upgrade_request)) {
