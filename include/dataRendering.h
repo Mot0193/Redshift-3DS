@@ -11,7 +11,7 @@
 #define MAX_CHAR_PER_MESSAGE_LINE 60
 #define LQ_IDLENGTH 128 // 24 + 1 for null terminator.. i think. I think im right since with 24 something falls over //changed to 128 for lq 0.4.1 support //TODO: uhhh.. do this better
 
-#define MAX_REND_MESSAGES 15 // the maximum amount of messages that should get displayed/rendered/saved per channel. This just determines the size of the "MessageStructure" Array
+#define MAX_REND_MESSAGES 15 // the maximum amount of messages that should get displayed/rendered/saved per channel. This also determines the size of the "MessageStructure" Array
 #define MAX_CHANNEL_QUARK 8 // the max channels or quarks that should get displayed on a *page*
 
 #define MESSAGE_USERNAME_TEXT_SIZE 0.5f

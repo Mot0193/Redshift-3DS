@@ -10,6 +10,7 @@
 
 // Text buffers
 C2D_TextBuf buftxt_messageContent[MAX_REND_MESSAGES], buftxt_messageUsername[MAX_REND_MESSAGES], buftxt_attachments[MAX_REND_MESSAGES];
+C2D_TextBuf buftxt_Quarks, buftxt_Channels;
 
 // Text objects
 C2D_Text txt_messageContent[MAX_REND_MESSAGES], txt_messageUsername[MAX_REND_MESSAGES], txt_attachments[MAX_REND_MESSAGES];
@@ -528,16 +529,17 @@ void Buf_C2D_Cleanup(){
         if (buftxt_messageUsername[i]) C2D_TextBufDelete(buftxt_messageUsername[i]);
         if (buftxt_attachments[i]) C2D_TextBufDelete(buftxt_attachments[i]);
     }
+    if (buftxt_Quarks) C2D_TextBufDelete(buftxt_Quarks);
+    if (buftxt_Channels) C2D_TextBufDelete(buftxt_Channels);
 }
 
 void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int selected_quark, int selected_channel, int entered_selected_channel){
     float total_quark_channel_height = 50.0f;
 
     if (!channel_select){
-        C2D_TextBuf quarkBuf = NULL;
         C2D_Text quarkText[MAX_CHANNEL_QUARK];
-        if (!quarkBuf) {
-            quarkBuf = C2D_TextBufNew(total_quarks_name_size);
+        if (!buftxt_Quarks) {
+            buftxt_Quarks = C2D_TextBufNew(total_quarks_name_size);
         }
 
         //int total_pages = (joined_quark_count + MAX_CHANNEL_QUARK - 1) / MAX_CHANNEL_QUARK; // determine number of pages (starts at 0) //nvm i dont need this //nvm i might need this if i want to display pages
@@ -547,11 +549,11 @@ void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int 
         int end_index = start_index + MAX_CHANNEL_QUARK;
         if (end_index > joined_quark_count) end_index = joined_quark_count;
 
-        C2D_TextBufClear(quarkBuf);
+        C2D_TextBufClear(buftxt_Quarks);
 
         float quark_line_height=0;
         for (int i = start_index; i < end_index; i++){
-            C2D_TextParse(&quarkText[i - start_index], quarkBuf, joined_quarks[i].name);
+            C2D_TextParse(&quarkText[i - start_index], buftxt_Quarks, joined_quarks[i].name);
             C2D_TextOptimize(&quarkText[i - start_index]);
 
             u32 color = (i == selected_quark) ? C2D_Color32(255, 0, 0, 255) : C2D_Color32(255, 255, 255, 255);
@@ -564,12 +566,12 @@ void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int 
     } 
     // displaying channels instead of quarks 
     else if (joined_quarks[selected_quark].channels_count > 0){
-        C2D_TextBuf channelBuf = NULL;
         C2D_Text channelText[joined_quarks[selected_quark].channels_count];
-        if (!channelBuf) {
-            channelBuf = C2D_TextBufNew(joined_quarks[selected_quark].channels_total_name_length);
+        if (!buftxt_Channels) {
+            buftxt_Channels = C2D_TextBufNew(joined_quarks[selected_quark].channels_total_name_length);
         } else {
-            channelBuf = C2D_TextBufResize(channelBuf, joined_quarks[selected_quark].channels_total_name_length);
+            C2D_TextBuf resized_buftxt_Channels = C2D_TextBufResize(buftxt_Channels, joined_quarks[selected_quark].channels_total_name_length);
+            buftxt_Channels = resized_buftxt_Channels;
         }
 
         int current_page = selected_channel / MAX_CHANNEL_QUARK; // the current page the selected <channel> is on
@@ -578,12 +580,12 @@ void DrawStructuredQuarks(struct Quark *joined_quarks, bool channel_select, int 
         int end_index = start_index + MAX_CHANNEL_QUARK;
         if (end_index > joined_quarks[selected_quark].channels_count) end_index = joined_quarks[selected_quark].channels_count;
 
-        C2D_TextBufClear(channelBuf);
+        C2D_TextBufClear(buftxt_Channels);
 
         float message_line_height = 0;
 
         for (int i = start_index; i < end_index; i++){
-            C2D_TextParse(&channelText[i - start_index], channelBuf, joined_quarks[selected_quark].channels[i].name);
+            C2D_TextParse(&channelText[i - start_index], buftxt_Channels, joined_quarks[selected_quark].channels[i].name);
             C2D_TextOptimize(&channelText[i - start_index]);
 
             u32 color;

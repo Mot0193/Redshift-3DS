@@ -191,6 +191,11 @@ bool touchingArea(touchPosition touch, touchPosition target1, touchPosition targ
     } else return false;
 }
 
+void log_heap_usage(void) {
+    struct mallinfo mi = mallinfo();
+    printf("[MEM] arena: %d, ordblks: %d, uordblks: %d, fordblks: %d\n", mi.arena, mi.ordblks, mi.uordblks, mi.fordblks);
+}
+
 int main() {
     gfxInitDefault();
     consoleInit(GFX_BOTTOM, NULL);
@@ -276,11 +281,7 @@ int main() {
         }
 
         if (kDown & KEY_A){
-            for (int i = 0; i < joined_quarks[selected_quark].channels[entered_selected_channel].total_messages; ++i){
-                int start_index = (joined_quarks[selected_quark].channels[entered_selected_channel].message_index - joined_quarks[selected_quark].channels[entered_selected_channel].total_messages + MAX_REND_MESSAGES) % MAX_REND_MESSAGES; //the oldest message
-                int msg_index = (start_index + i) % MAX_REND_MESSAGES;
-                printf("Message %i start: %f\n", i, joined_quarks[selected_quark].channels[entered_selected_channel].messages[msg_index].content_message_start);
-            }
+            log_heap_usage();
         }
         if (kDown & KEY_B){
         }
