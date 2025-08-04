@@ -248,8 +248,14 @@ void addMessageToArray(struct Channel *channel_struct, int array_size, cJSON *js
     cJSON *channelId = cJSON_GetObjectItemCaseSensitive(json_response, "channelId");
 
     char *wrappedContent = NULL;
-    if (strlen(content->valuestring) > MAX_CHAR_PER_MESSAGE_LINE) {
-        wrappedContent = strdup(WrappedMessage(content->valuestring));
+    if (strlen(content->valuestring) > MAX_CHAR_PER_MESSAGE_LINE) { //wrap message if its too long
+        char *wrapped = WrappedMessage(content->valuestring);
+        if (wrapped) {
+            wrappedContent = wrapped;
+        } else {
+            //fallback if wrapping failed
+            wrappedContent = strdup(content->valuestring);
+        }
     } else {
         wrappedContent = strdup(content->valuestring);
     }
@@ -441,7 +447,7 @@ void ParseTextMessages(struct Channel *channel_struct){
                 C2D_TextBufClear(buftxt_attachments[i]);
                 C2D_TextParse(&txt_attachments[i], buftxt_attachments[i], attachment_text);
                 C2D_TextOptimize(&txt_attachments[i]);
-                printf("Multiple attachment text: %s\n", attachment_text);
+                //printf("Multiple attachment text: %s\n", attachment_text);
             } else if (channel_struct->messages[message_arr_index].attachment_count == 1){
                 if (!buftxt_attachments[i]) buftxt_attachments[i] = C2D_TextBufNew(MAX_CHAR_PER_MESSAGE_LINE);
 
@@ -451,7 +457,7 @@ void ParseTextMessages(struct Channel *channel_struct){
                 C2D_TextBufClear(buftxt_attachments[i]);
                 C2D_TextParse(&txt_attachments[i], buftxt_attachments[i], attachment_text);
                 C2D_TextOptimize(&txt_attachments[i]);
-                printf("Single attachment text: %s\n", channel_struct->messages[message_arr_index].attachments[0].filename);
+                //printf("Single attachment text: %s\n", channel_struct->messages[message_arr_index].attachments[0].filename);
             } 
         }
     }
